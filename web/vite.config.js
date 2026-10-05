@@ -7,4 +7,13 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          firebase: ["firebase/app", "firebase/auth", "firebase/firestore", "firebase/analytics"],
+        },
+      },
+    },
+  },
 });

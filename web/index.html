@@ -3,24 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HeroBet — Gift Drop</title>
-    <meta
-      name="description"
-      content="HeroBet Gift Drop — hourly gift rain. Catch it. Claim it. Win it."
-    />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A1224'/%3E%3Cpath d='M18 4 9 18h5.5L13 28l10-14h-5.5L18 4z' fill='%23FFC53D'/%3E%3C/svg%3E"
-    />
+    <title>HeroBet — Hero Gaming Platform</title>
+    <meta name="description" content="HeroBet — superhero-inspired gaming platform. Classic Crash, Hero Dice and the hourly Gift Drop rain. Catch it. Claim it. Win it." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A1224'/%3E%3Cpath d='M18 4 9 18h5.5L13 28l10-14h-5.5L18 4z' fill='%23FFC53D'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Sora:wght@400;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <!-- Shared SVG gradients for gift artwork -->
+    <!-- shared SVG gradients for gift/shield artwork -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
         <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1">
@@ -34,218 +25,64 @@
       </defs>
     </svg>
 
-    <header class="topbar">
-      <div class="brand">
-        <svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true">
-          <path
-            d="M24 3 6 9v14c0 11 7.6 19.4 18 22 10.4-2.6 18-11 18-22V9L24 3z"
-            fill="url(#gGold)"
-          />
-          <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224" />
-        </svg>
-        <span class="wordmark">HERO<em>BET</em></span>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#/">
+          <svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true">
+            <path d="M24 3 6 9v14c0 11 7.6 19.4 18 22 10.4-2.6 18-11 18-22V9L24 3z" fill="url(#gGold)" />
+            <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224" />
+          </svg>
+          <span class="wordmark">HERO<em>BET</em></span>
+        </a>
+
+        <span id="modeChip" class="chip"><span class="dot"></span> connecting…</span>
+
+        <div class="top-right">
+          <a class="wallet-chip" id="walletChip" href="#/wallet">₦ —</a>
+          <button class="btn small" id="depositBtn">Deposit</button>
+          <div id="authArea"></div>
+        </div>
+      </header>
+
+      <div id="setupBanner" class="setup-banner" hidden></div>
+
+      <div class="shell">
+        <aside class="sidebar">
+          <nav>
+            <div class="nav-sec">Play</div>
+            <a data-route="/" href="#/">⚡ <span>Lobby</span></a>
+            <a data-route="/crash" href="#/crash">🚀 <span>Classic Crash</span></a>
+            <a data-route="/dice" href="#/dice">🎲 <span>Hero Dice</span></a>
+            <a data-route="/gift-drop" href="#/gift-drop">🎁 <span>Gift Drop demo</span></a>
+            <div class="nav-sec">Account</div>
+            <a data-route="/promos" href="#/promos">🏆 <span>Promotions</span></a>
+            <a data-route="/wallet" href="#/wallet">💰 <span>Wallet</span></a>
+            <a data-route="/history" href="#/history">📜 <span>History</span></a>
+          </nav>
+          <div class="side-foot">
+            18+ · Play responsibly<br />
+            Demo build — simulated money
+          </div>
+        </aside>
+
+        <main id="outlet"></main>
       </div>
-      <div class="top-right">
-        <span id="firebaseChip" class="chip" title="Firebase project status"
-          ><span class="dot"></span> Firebase: connecting…</span
-        >
-        <div class="wallet">
-          <span class="wallet-label">Wallet</span>
-          <span class="wallet-amt">₦<span id="walletBalance">0</span></span>
-        </div>
-      </div>
-    </header>
 
-    <main>
-      <section class="hero">
-        <div class="hero-tag">Catch it. Claim it. Win it.</div>
-        <h1 class="hero-title">GIFT DROP</h1>
-        <p class="hero-sub">
-          Hourly gift rain — <strong>₦50,000</strong> day pools,
-          <strong>₦100,000</strong> evening pools. One round every hour,
-          9:35am – 11:35pm. Rain strikes randomly between :35 and :45.
-        </p>
-        <p class="hero-terms">
-          Gifts are <strong>real cash</strong>, credited instantly — no
-          wagering. One claim per player per round. Eligibility requires
-          qualifying Classic stakes placed at or before 20 minutes before rain
-          start. 18+.
-        </p>
-      </section>
+      <nav class="bottomnav">
+        <a data-route="/" href="#/"><span>⚡</span>Home</a>
+        <a data-route="/crash" href="#/crash"><span>🚀</span>Crash</a>
+        <a data-route="/dice" href="#/dice"><span>🎲</span>Dice</a>
+        <a data-route="/promos" href="#/promos"><span>🏆</span>Promos</a>
+        <a data-route="/wallet" href="#/wallet"><span>💰</span>Wallet</a>
+      </nav>
 
-      <section class="panel-grid">
-        <div class="card">
-          <div class="card-head">
-            <h2>Next Gift Drop</h2>
-            <span id="tierChip" class="chip gold">—</span>
-          </div>
-          <div class="next-round">
-            <div id="nextTime" class="next-time">--:--:--</div>
-            <div id="rainWindow" class="next-window">Rain window —</div>
-          </div>
-          <div id="poolLine" class="pool-line">—</div>
-
-          <div class="elig-row">
-            <span id="eligBadge" class="badge no">Not eligible</span>
-            <span id="reqLine" class="req-line">—</span>
-          </div>
-
-          <div class="bet-buttons">
-            <button id="btnHedge" class="btn">Place hedge</button>
-            <button id="btnRaw" class="btn ghost">Raw bet</button>
-          </div>
-          <p id="betNote" class="bet-note">
-            Qualify with the calibrated hedge — or a raw bet (raw qualifying
-            bets pay <strong>stake only</strong> if they win, no multiplier).
-          </p>
-
-          <details class="hedge-details">
-            <summary>The hedge recipe (per Classic crash round)</summary>
-            <table class="hedge-table">
-              <tr>
-                <td>Classic crash, auto-cashout 1.50x</td>
-                <td class="num">₦1,000</td>
-              </tr>
-              <tr>
-                <td>O/U Under 1.5 (coeff ≈ 2.757)</td>
-                <td class="num">₦544</td>
-              </tr>
-              <tr class="total">
-                <td>Staked / returned either way</td>
-                <td class="num">₦1,544 → ₦1,500</td>
-              </tr>
-              <tr class="cost">
-                <td>Guaranteed cost per pair</td>
-                <td class="num">₦44</td>
-              </tr>
-            </table>
-            <p class="hedge-note">
-              ×5 pairs qualifies a day round (₦220) · ×10 pairs qualifies an
-              evening round (₦440).
-            </p>
-          </details>
-        </div>
-
-        <div class="card">
-          <div class="card-head">
-            <h2>Round simulation</h2>
-            <span class="chip">demo</span>
-          </div>
-          <label class="field">
-            <span>Eligible players this round (including you)</span>
-            <input
-              id="eligibleCount"
-              type="number"
-              min="0"
-              max="5000"
-              value="24"
-            />
-          </label>
-          <div id="winnersPreview" class="winners-preview">—</div>
-          <div class="sim-buttons">
-            <button id="btnTrigger" class="btn danger">Trigger rain now</button>
-            <button id="btnReset" class="btn ghost">Reset demo</button>
-          </div>
-          <p class="sim-note">
-            Winners are drawn at rain start: a random 30% of eligible players,
-            capped at 100 (the pool). Tapping only pays out if you were drawn —
-            and before the gifts run out.
-          </p>
-        </div>
-      </section>
-
-      <section class="how">
-        <h2>How Gift Drop works</h2>
-        <div class="how-grid">
-          <div class="how-card">
-            <div class="how-num">1</div>
-            <h3>Qualify</h3>
-            <p>
-              Place the hedge on Classic — or a raw bet — at or before 20
-              minutes before rain start. Day rounds need ₦5,000, evening
-              rounds ₦10,000.
-            </p>
-          </div>
-          <div class="how-card">
-            <div class="how-num">2</div>
-            <h3>Watch the skies</h3>
-            <p>
-              One round every hour from 9:35am to 11:35pm. Rain fires randomly
-              inside the :35–:45 window, preceded by a 59-second warning.
-            </p>
-          </div>
-          <div class="how-card">
-            <div class="how-num">3</div>
-            <h3>Tap fast</h3>
-            <p>
-              When the gifts fall, tap before the progress bar empties. Only a
-              random 30% of eligible heroes are drawn to win each round.
-            </p>
-          </div>
-          <div class="how-card">
-            <div class="how-num">4</div>
-            <h3>Get paid</h3>
-            <p>
-              ₦500 per gift by day, ₦1,000 in the evening — real cash, credited
-              to your wallet the moment your gift opens.
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="footer">
-      <p>
-        HeroBet demo build — not a live gambling service. Rewards shown are
-        simulated. 18+ · Play responsibly.
-      </p>
-    </footer>
-
-    <!-- 59s warning banner -->
-    <div id="incomingBanner" class="incoming" aria-live="polite">
-      <div class="incoming-label">⚡ GIFT DROP INCOMING</div>
-      <div class="incoming-secs"><span id="incomingSecs">59</span>s</div>
-      <div class="incoming-sub">Claim it before it disappears.</div>
+      <footer class="footer">
+        <p>HeroBet — demo build. Not a live gambling service; all balances and rewards are simulated. 18+ · Play responsibly.</p>
+      </footer>
     </div>
 
-    <!-- Rain overlay -->
-    <div id="rainOverlay" class="rain-overlay" hidden>
-      <div id="giftsField" class="gifts-field"></div>
-      <div class="rain-ui">
-        <div id="rainPool" class="rain-pool">₦100,000 GIFT RAIN</div>
-        <div class="rain-timer">
-          <span id="rainSecs">60</span>s
-        </div>
-        <button id="tapBtn" class="tap-btn">
-          <span class="tap-ring"></span>
-          TAP TO<br />CLAIM
-        </button>
-        <div id="rainMsg" class="rain-msg"></div>
-        <div class="bar">
-          <div id="barFill" class="bar-fill"></div>
-        </div>
-        <div id="giftsLeftTxt" class="gifts-left">— / — gifts left</div>
-      </div>
-    </div>
-
-    <!-- Result modal -->
-    <div id="resultModal" class="modal" hidden>
-      <div class="modal-card">
-        <div class="burst"></div>
-        <div id="resultBox" class="giftbox">
-          <div class="lid"><span class="bow"></span></div>
-          <div class="boxbody">
-            <svg viewBox="0 0 24 24" class="bolt" aria-hidden="true">
-              <path d="M13 2 4 16h6l-1.5 6L18 8h-6l1-6z" />
-            </svg>
-          </div>
-        </div>
-        <h2 id="resultTitle">A HEROIC REWARD JUST DROPPED</h2>
-        <div id="resultAmount" class="amount">₦500</div>
-        <p id="resultSub"></p>
-        <button id="resultClose" class="btn">Continue</button>
-      </div>
-    </div>
+    <div id="toasts"></div>
+    <div id="modalRoot"></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>
