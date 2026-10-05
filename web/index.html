@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HeroBet — Hero Gaming Platform</title>
+    <meta name="description" content="HeroBet — superhero-inspired gaming platform. Classic Crash, Hero Dice and the hourly Gift Drop rain. Catch it. Claim it. Win it." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A1224'/%3E%3Cpath d='M18 4 9 18h5.5L13 28l10-14h-5.5L18 4z' fill='%23FFC53D'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <!-- shared SVG gradients for gift/shield artwork -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#FFE08A" />
+          <stop offset="1" stop-color="#E8A200" />
+        </linearGradient>
+        <linearGradient id="gCrimson" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#E23A4E" />
+          <stop offset="1" stop-color="#8E1B2E" />
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#/">
+          <svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true">
+            <path d="M24 3 6 9v14c0 11 7.6 19.4 18 22 10.4-2.6 18-11 18-22V9L24 3z" fill="url(#gGold)" />
+            <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224" />
+          </svg>
+          <span class="wordmark">HERO<em>BET</em></span>
+        </a>
+
+        <span id="modeChip" class="chip"><span class="dot"></span> connecting…</span>
+
+        <div class="top-right">
+          <a class="wallet-chip" id="walletChip" href="#/wallet">₦ —</a>
+          <button class="btn small" id="depositBtn">Deposit</button>
+          <div id="authArea"></div>
+        </div>
+      </header>
+
+      <div id="setupBanner" class="setup-banner" hidden></div>
+
+      <div class="shell">
+        <aside class="sidebar">
+          <nav>
+            <div class="nav-sec">Play</div>
+            <a data-route="/" href="#/">⚡ <span>Lobby</span></a>
+            <a data-route="/crash" href="#/crash">🚀 <span>Classic Crash</span></a>
+            <a data-route="/dice" href="#/dice">🎲 <span>Hero Dice</span></a>
+            <a data-route="/gift-drop" href="#/gift-drop">🎁 <span>Gift Drop demo</span></a>
+            <div class="nav-sec">Account</div>
+            <a data-route="/promos" href="#/promos">🏆 <span>Promotions</span></a>
+            <a data-route="/wallet" href="#/wallet">💰 <span>Wallet</span></a>
+            <a data-route="/history" href="#/history">📜 <span>History</span></a>
+          </nav>
+          <div class="side-foot">
+            18+ · Play responsibly<br />
+            Demo build — simulated money
+          </div>
+        </aside>
+
+        <main id="outlet"></main>
+      </div>
+
+      <nav class="bottomnav">
+        <a data-route="/" href="#/"><span>⚡</span>Home</a>
+        <a data-route="/crash" href="#/crash"><span>🚀</span>Crash</a>
+        <a data-route="/dice" href="#/dice"><span>🎲</span>Dice</a>
+        <a data-route="/promos" href="#/promos"><span>🏆</span>Promos</a>
+        <a data-route="/wallet" href="#/wallet"><span>💰</span>Wallet</a>
+      </nav>
+
+      <footer class="footer">
+        <p>HeroBet — demo build. Not a live gambling service; all balances and rewards are simulated. 18+ · Play responsibly.</p>
+      </footer>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="modalRoot"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
