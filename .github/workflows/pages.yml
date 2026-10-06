@@ -40,6 +40,9 @@ jobs:
           path: web/dist
 
   deploy:
+    # The repo currently protects the github-pages environment so only main can deploy.
+    # Feature branches still build successfully; merge to main to publish the site.
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
