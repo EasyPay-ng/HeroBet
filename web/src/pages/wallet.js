@@ -1,140 +1,165 @@
-// HeroBet — Wallet page (balance, simulated deposit/withdraw, ledger)
-import { $, fmtN, esc, timeAgo, toast } from "../ui.js";
-import { currentUser, subscribeWallet, subscribeLedger, credit, debit } from "../backend.js";
+// HeroBet — cash account: balances, paper top-ups and the full ledger.
+
+import { subscribeAccount, subscribeLedger, deposit, resetAccount, currentUser, STARTING_CASH } from "../backend.js";
+import { onPortfolio } from "../engine/monitor.js";
+import { usdRates } from "../market/fx.js";
 import { openAuthModal } from "../auth-ui.js";
+import { $, $$, esc, usd, usdSigned, pct, dirClass, dateTime, toast, confirmDialog } from "../ui.js";
 
-const template = `
-<section class="page-head">
-  <div>
-    <h1>WALLET</h1>
-    <p class="sub">Demo wallet for escrowed prediction-pool stakes and transactions</p>
-  </div>
-  <div class="page-head-right"><span class="chip">NGN · simulated</span></div>
-</section>
-
-<div class="wallet-layout">
-  <div class="card balance-card" id="balanceCard"></div>
-
-  <div class="card">
-    <div class="card-head"><h2>ADD DEMO FUNDS</h2><span class="chip gold">instant · demo</span></div>
-    <div class="chips-row">
-      <button class="mini" data-dep="1000">₦1,000</button>
-      <button class="mini" data-dep="5000">₦5,000</button>
-      <button class="mini" data-dep="10000">₦10,000</button>
-      <button class="mini" data-dep="50000">₦50,000</button>
-    </div>
-    <label class="field">
-      <span>Custom amount (₦)</span>
-      <input id="depAmount" type="number" min="100" step="100" placeholder="e.g. 2500" />
-    </label>
-    <button class="btn wide" id="depBtn">Simulate deposit</button>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><h2>WITHDRAW</h2><span class="chip">demo</span></div>
-    <label class="field">
-      <span>Amount (₦) · min ₦1,000</span>
-      <input id="wdAmount" type="number" min="1000" step="100" placeholder="e.g. 5000" />
-    </label>
-    <button class="btn ghost wide" id="wdBtn">Simulate withdrawal</button>
-    <p class="bet-note">Real payments, escrow segregation and KYC/AML arrive with the payments milestone — until then all money on HeroBet is simulated demo credit.</p>
-  </div>
-</div>
-
-<section class="sec">
-  <div class="sec-head"><h2>TRANSACTIONS</h2></div>
-  <div class="card"><div class="live-table" id="ledgerTable"></div></div>
-</section>
-`;
-
-function renderLedger(rows) {
-  if (!rows.length) return `<div class="empty">No transactions yet.</div>`;
-  const label = {
-    deposit: "Deposit",
-    withdrawal: "Withdrawal",
-    bet: "Bet placed",
-    payout: "Payout",
-    "demo-grant": "Welcome credit",
-    "rain-demo": "Gift Drop demo win",
-  };
-  return `<table><thead><tr>
-    <th>Type</th><th>Note</th><th class="num">Amount</th><th class="num">Balance</th><th></th>
-  </tr></thead><tbody>${rows
-    .map(
-      (r) => `<tr>
-      <td>${label[r.type] || esc(r.type)}</td>
-      <td class="dim">${esc(r.note || "")}</td>
-      <td class="num ${r.amount >= 0 ? "win" : "loss"}">${r.amount >= 0 ? "+" : ""}${fmtN(r.amount)}</td>
-      <td class="num">${fmtN(r.balanceAfter)}</td>
-      <td class="dim">${timeAgo(r.createdAt)}</td>
-    </tr>`
-    )
-    .join("")}</tbody></table>`;
-}
+const LOCAL_CCY = "NGN";
 
 export const walletPage = {
   mount(outlet) {
-    outlet.innerHTML = template;
+    let account = null;
+    let ngnRate = 0;
 
-    const renderBalance = (w) => {
-      const u = currentUser();
-      $("#balanceCard").innerHTML = !u
-        ? `<p class="dim">Sign in to open your wallet.</p><button class="btn wide" id="wSignin">Sign in</button>`
-        : `<div class="wallet-big">${w ? fmtN(w.balance) : "—"}</div>
-           <p class="dim">${esc(u.name)} · demo balance for prediction-pool testing</p>`;
-      const b = $("#wSignin");
-      if (b) b.addEventListener("click", openAuthModal);
+    outlet.innerHTML = `
+      <section class="page narrow">
+        <header class="page-head">
+          <div><h1>Cash &amp; ledger</h1><p class="muted">Paper capital in USD. Every movement is journalled.</p></div>
+        </header>
+
+        <div class="card balance-card">
+          <div class="bal-main">
+            <span class="muted">Account equity</span>
+            <div class="bal-big" id="wEquity">—</div>
+            <div class="muted" id="wLocal"></div>
+          </div>
+          <dl class="bal-grid">
+            <div><dt>Settled cash</dt><dd id="wCash">—</dd></div>
+            <div><dt>Margin reserved</dt><dd id="wReserved">—</dd></div>
+            <div><dt>Buying power</dt><dd id="wAvail">—</dd></div>
+            <div><dt>Total P&amp;L</dt><dd id="wPnl">—</dd></div>
+          </dl>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Add paper capital</h3></div>
+          <div class="pad">
+            <p class="muted">Top-ups are simulated book entries — HeroBet never accepts real deposits and holds no client funds.</p>
+            <div class="row gap wrap mt">
+              ${[1000, 5000, 25000, 100000].map((v) => `<button class="btn" data-dep="${v}">+ ${usd(v, 0)}</button>`).join("")}
+            </div>
+            <div class="row gap mt">
+              <input class="input" id="depCustom" type="number" min="1" step="100" placeholder="Custom amount (USD)" />
+              <button class="btn primary" id="depBtn">Add</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card table-card">
+          <div class="card-head"><h3>Ledger</h3><span class="muted small">newest first</span></div>
+          <table class="data-table">
+            <thead><tr><th>Entry</th><th class="num">Amount</th><th class="num">Balance after</th><th class="num">When</th></tr></thead>
+            <tbody id="ledBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card danger-zone">
+          <div class="card-head"><h3>Danger zone</h3></div>
+          <div class="pad row between center wrap gap">
+            <p class="muted">Reset wipes positions, orders and fills, then restores the ${usd(STARTING_CASH, 0)} opening balance.</p>
+            <button class="btn danger" id="resetBtn">Reset account</button>
+          </div>
+        </div>
+      </section>
+    `;
+
+    if (!currentUser()) {
+      outlet.querySelector(".page").insertAdjacentHTML(
+        "afterbegin",
+        `<div class="notice hero"><div><strong>Sign in to open a cash account.</strong></div><button class="btn primary" id="si">Sign in</button></div>`
+      );
+      $("#si", outlet).addEventListener("click", () => openAuthModal());
+    }
+
+    usdRates()
+      .then((t) => {
+        ngnRate = t.rates?.[LOCAL_CCY] || 0;
+        paintLocal();
+      })
+      .catch(() => {});
+
+    let equity = 0;
+    function paintLocal() {
+      const el = $("#wLocal", outlet);
+      if (!el) return;
+      el.textContent = ngnRate
+        ? `≈ ₦${(equity * ngnRate).toLocaleString("en-NG", { maximumFractionDigits: 0 })} at the live USD/${LOCAL_CCY} rate`
+        : "";
+    }
+
+    const unsubSummary = onPortfolio((s) => {
+      equity = s.equity;
+      $("#wEquity", outlet).textContent = usd(s.equity);
+      $("#wCash", outlet).textContent = usd(s.cash);
+      $("#wReserved", outlet).textContent = usd(s.reserved);
+      $("#wAvail", outlet).textContent = usd(s.available);
+      const p = $("#wPnl", outlet);
+      p.textContent = `${usdSigned(s.totalPnl)} (${pct(s.totalPnlPct)})`;
+      p.className = dirClass(s.totalPnl);
+      paintLocal();
+    });
+
+    const unsubAcct = subscribeAccount((a) => (account = a));
+
+    const doDeposit = async (amount) => {
+      if (!currentUser()) return openAuthModal();
+      try {
+        await deposit(amount);
+        toast(`Added ${usd(amount, 0)} paper capital`, "ok");
+      } catch (e) {
+        toast(e.message, "warn");
+      }
     };
 
-    let unWallet = subscribeWallet(renderBalance);
-    renderBalance(null);
+    $$("[data-dep]", outlet).forEach((b) => b.addEventListener("click", () => doDeposit(Number(b.dataset.dep))));
+    $("#depBtn", outlet).addEventListener("click", () => {
+      const v = Number($("#depCustom", outlet).value);
+      if (!(v > 0)) return toast("Enter an amount", "warn");
+      $("#depCustom", outlet).value = "";
+      doDeposit(v);
+    });
 
-    let unLedger = subscribeLedger((rows) => ($("#ledgerTable").innerHTML = renderLedger(rows)));
-
-    $("#depBtn").addEventListener("click", async () => {
+    $("#resetBtn", outlet).addEventListener("click", async () => {
       if (!currentUser()) return openAuthModal();
-      const amount = Math.round(Number($("#depAmount").value));
-      if (!(amount >= 100)) return toast("Enter an amount of at least ₦100", "warn");
+      const ok = await confirmDialog(
+        "Reset trading account",
+        "This deletes every position, order and fill and restores your opening balance. It cannot be undone.",
+        "Reset everything"
+      );
+      if (!ok) return;
       try {
-        await credit({ type: "deposit", amount, note: "Simulated deposit" });
-        toast(`Deposited ${fmtN(amount)} ⚡`, "ok");
-        $("#depAmount").value = "";
+        await resetAccount();
+        toast("Account reset", "ok");
       } catch (e) {
-        toast(e.message, "err");
+        toast(e.message, "warn");
       }
     });
 
-    document.querySelectorAll("[data-dep]").forEach((b) =>
-      b.addEventListener("click", async () => {
-        if (!currentUser()) return openAuthModal();
-        const amount = Number(b.dataset.dep);
-        try {
-          await credit({ type: "deposit", amount, note: "Simulated deposit" });
-          toast(`Deposited ${fmtN(amount)} ⚡`, "ok");
-        } catch (e) {
-          toast(e.message, "err");
-        }
-      })
-    );
-
-    $("#wdBtn").addEventListener("click", async () => {
-      if (!currentUser()) return openAuthModal();
-      const amount = Math.round(Number($("#wdAmount").value));
-      if (!(amount >= 1000)) return toast("Minimum withdrawal is ₦1,000", "warn");
-      try {
-        await debit({ type: "withdrawal", amount, note: "Simulated withdrawal" });
-        toast(`Withdrawal of ${fmtN(amount)} requested`, "ok");
-        $("#wdAmount").value = "";
-      } catch (e) {
-        if (e.message === "INSUFFICIENT") toast("Not enough balance for that withdrawal", "err");
-        else toast(e.message, "err");
+    const unsubLedger = subscribeLedger((rows) => {
+      const body = $("#ledBody", outlet);
+      if (!rows.length) {
+        body.innerHTML = `<tr><td colspan="4" class="empty">No entries yet.</td></tr>`;
+        return;
       }
+      body.innerHTML = rows
+        .map(
+          (l) => `<tr>
+            <td><span class="status ${esc(l.type)}">${esc(l.type)}</span> <span class="muted">${esc(l.note || "")}</span></td>
+            <td class="num ${dirClass(l.amount)}">${usdSigned(l.amount)}</td>
+            <td class="num">${usd(l.balanceAfter)}</td>
+            <td class="num muted">${dateTime(l.createdAt)}</td>
+          </tr>`
+        )
+        .join("");
     });
 
     return {
       destroy() {
-        unWallet && unWallet();
-        unLedger && unLedger();
+        unsubSummary();
+        unsubAcct();
+        unsubLedger();
       },
     };
   },

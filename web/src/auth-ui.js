@@ -1,124 +1,147 @@
-// HeroBet — auth modal + profile menu
-import { $, esc, openModal, toast } from "./ui.js";
-import { currentUser, signInGuest, signInEmail, signUpEmail, signOut } from "./backend.js";
+// HeroBet — sign-in / sign-up modal and the profile menu.
 
-export function openAuthModal() {
-  const m = openModal(
-    `
-    <div class="auth-modal">
-      <div class="auth-hero">
-        <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true">
-          <path d="M24 3 6 9v14c0 11 7.6 19.4 18 22 10.4-2.6 18-11 18-22V9L24 3z" fill="url(#gGold)"/>
-          <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224"/>
-        </svg>
-        <h2>JOIN THE HEROES</h2>
-        <p>One account for Prediction Pools, Wallet & demo games.</p>
+import { signInEmail, signUpEmail, signInGuest, signOut, currentUser, mode } from "./backend.js";
+import { $, openModal, toast, esc } from "./ui.js";
+
+export function openAuthModal(initial = "signin") {
+  const m = openModal(`
+    <div class="auth">
+      <div class="auth-head">
+        <h3>HeroBet Markets</h3>
+        <p class="muted">Open a paper-trading account. Real market prices, simulated capital.</p>
       </div>
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="in">Sign in</button>
-        <button class="auth-tab" data-tab="up">Create account</button>
+      <div class="tabs" id="authTabs">
+        <button class="tab ${initial === "signin" ? "on" : ""}" data-tab="signin">Sign in</button>
+        <button class="tab ${initial === "signup" ? "on" : ""}" data-tab="signup">Create account</button>
       </div>
-      <form id="authForm" class="auth-form">
-        <label class="field" data-only="up" hidden>
-          <span>Hero name</span>
-          <input id="authName" type="text" maxlength="24" placeholder="e.g. LagosLightning" autocomplete="nickname" />
+
+      <form id="authForm" class="stack">
+        <label class="field" id="nameField" ${initial === "signin" ? "hidden" : ""}>
+          <span>Display name</span>
+          <input id="aName" type="text" autocomplete="nickname" placeholder="Ada" maxlength="24" />
         </label>
         <label class="field">
           <span>Email</span>
-          <input id="authEmail" type="email" required placeholder="you@email.com" autocomplete="email" />
+          <input id="aEmail" type="email" autocomplete="email" placeholder="you@email.com" required />
         </label>
         <label class="field">
           <span>Password</span>
-          <input id="authPass" type="password" required minlength="6" placeholder="min. 6 characters" autocomplete="current-password" />
+          <input id="aPass" type="password" autocomplete="current-password" placeholder="At least 6 characters" required minlength="6" />
         </label>
-        <div id="authErr" class="auth-err" hidden></div>
-        <button type="submit" class="btn wide" id="authSubmit">Sign in</button>
+        <p class="form-error" id="authErr" hidden></p>
+        <button class="btn primary block" id="authSubmit" type="submit">${initial === "signin" ? "Sign in" : "Create account"}</button>
       </form>
-      <div class="auth-or"><span>or</span></div>
-      <button id="authGuest" class="btn ghost wide">⚡ Continue as guest</button>
-      <p class="auth-fine">New accounts get a ₦10,000 demo credit for testing pool tickets. 18+ · Play responsibly.</p>
+
+      <div class="divider"><span>or</span></div>
+      <button class="btn ghost block" id="guestBtn">Continue as guest</button>
+      <p class="fineprint">
+        Guest accounts work instantly and keep a full trading history. Paper capital only —
+        HeroBet never takes deposits or holds client funds.
+      </p>
     </div>
-    `
-  );
+  `);
 
-  let tab = "in";
-  $$(".auth-tab", m.el).forEach((b) =>
-    b.addEventListener("click", () => {
-      tab = b.dataset.tab;
-      $$(".auth-tab", m.el).forEach((x) => x.classList.toggle("active", x === b));
-      $("[data-only=up]", m.el).hidden = tab !== "up";
-      $("#authSubmit", m.el).textContent = tab === "up" ? "Create account" : "Sign in";
-    })
-  );
+  const root = m.el;
+  let tab = initial;
 
-  $("#authForm", m.el).addEventListener("submit", async (e) => {
+  const setTab = (t) => {
+    tab = t;
+    root.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+    $("#nameField", root).hidden = t === "signin";
+    $("#authSubmit", root).textContent = t === "signin" ? "Sign in" : "Create account";
+    $("#aPass", root).setAttribute("autocomplete", t === "signin" ? "current-password" : "new-password");
+  };
+  root.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+  const showErr = (msg) => {
+    const el = $("#authErr", root);
+    el.textContent = msg;
+    el.hidden = !msg;
+  };
+
+  $("#authForm", root).addEventListener("submit", async (e) => {
     e.preventDefault();
-    const email = $("#authEmail", m.el).value.trim();
-    const pass = $("#authPass", m.el).value;
-    const name = $("#authName", m.el)?.value.trim();
-    const errEl = $("#authErr", m.el);
-    errEl.hidden = true;
-    $("#authSubmit", m.el).disabled = true;
+    const btn = $("#authSubmit", root);
+    btn.disabled = true;
+    btn.textContent = "Working…";
+    showErr("");
     try {
-      if (tab === "up") await signUpEmail(email, pass, name);
-      else await signInEmail(email, pass);
+      const email = $("#aEmail", root).value.trim();
+      const pass = $("#aPass", root).value;
+      if (tab === "signin") await signInEmail(email, pass);
+      else await signUpEmail(email, pass, $("#aName", root).value.trim());
       m.close();
-      toast("Welcome back, hero! ⚡", "ok");
+      toast("Welcome to the desk", "ok");
     } catch (err) {
-      errEl.textContent = err.message;
-      errEl.hidden = false;
-    } finally {
-      $("#authSubmit", m.el).disabled = false;
+      showErr(err.message);
+      btn.disabled = false;
+      btn.textContent = tab === "signin" ? "Sign in" : "Create account";
     }
   });
 
-  $("#authGuest", m.el).addEventListener("click", async () => {
+  $("#guestBtn", root).addEventListener("click", async () => {
     try {
       await signInGuest();
       m.close();
-      toast("You're in — ₦10,000 demo credit added ⚡", "ok");
+      toast("Guest desk opened — $100,000 paper capital", "ok");
     } catch (err) {
-      toast(err.message, "err");
+      showErr(err.message);
     }
   });
+
+  return m;
 }
 
+let menu = null;
+
 export function toggleProfileMenu() {
-  const existing = document.getElementById("profileMenu");
-  if (existing) {
-    existing.remove();
+  if (menu) {
+    menu.remove();
+    menu = null;
     return;
   }
   const u = currentUser();
-  const menu = document.createElement("div");
-  menu.id = "profileMenu";
+  if (!u) return openAuthModal();
+
+  menu = document.createElement("div");
   menu.className = "profile-menu";
   menu.innerHTML = `
-    <div class="pm-name">${esc(u ? u.name : "Guest")}</div>
-    <div class="pm-sub">${u?.email ? esc(u.email) : "Guest hero · " + (u?.uid || "").slice(0, 10)}</div>
-    <a href="#/wallet">Wallet & deposits</a>
-    <a href="#/history">My bets</a>
-    ${u?.email ? "" : '<div class="pm-sub">Guest account — progress lives on this project</div>'}
-    <button id="pmSignOut">Sign out</button>
+    <div class="pm-head">
+      <strong>${esc(u.name)}</strong>
+      <span class="muted">${esc(u.email || (u.anonymous ? "Guest account" : "Paper trader"))}</span>
+      <span class="chip tiny">${mode === "firestore" ? "Firestore" : "Local only"}</span>
+    </div>
+    <a href="#/portfolio">Portfolio</a>
+    <a href="#/orders">Orders &amp; fills</a>
+    <a href="#/wallet">Cash &amp; ledger</a>
+    <a href="#/settings">Settings</a>
+    <button id="pmOut" class="danger-link">Sign out</button>
   `;
   document.body.appendChild(menu);
-  const rect = document.getElementById("profileBtn").getBoundingClientRect();
-  menu.style.top = rect.bottom + 10 + "px";
-  menu.style.right = Math.max(10, window.innerWidth - rect.right) + "px";
-  menu.addEventListener("click", (e) => {
-    if (e.target.id === "pmSignOut") {
-      signOut();
-      menu.remove();
-      toast("Signed out. See you, hero.");
-    }
+
+  const btn = document.getElementById("profileBtn");
+  const r = btn.getBoundingClientRect();
+  menu.style.top = r.bottom + 8 + "px";
+  menu.style.right = Math.max(12, window.innerWidth - r.right) + "px";
+
+  menu.querySelector("#pmOut").addEventListener("click", async () => {
+    await signOut();
+    toggleProfileMenu();
+    location.hash = "#/markets";
   });
+  menu.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => toggleProfileMenu()));
+
   setTimeout(() => {
-    const close = (e) => {
-      if (!menu.contains(e.target) && e.target.id !== "profileBtn") {
-        menu.remove();
-        document.removeEventListener("click", close);
-      }
-    };
-    document.addEventListener("click", close);
-  }, 10);
+    document.addEventListener("click", onAway, { once: true });
+  }, 0);
+}
+
+function onAway(e) {
+  if (!menu) return;
+  if (menu.contains(e.target) || e.target.id === "profileBtn") {
+    document.addEventListener("click", onAway, { once: true });
+    return;
+  }
+  menu.remove();
+  menu = null;
 }

@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>HeroBet</title>
+    <meta name="robots" content="noindex" />
+    <script>
+      // GitHub Pages serves this for unknown paths; bounce back into the SPA.
+      var base = location.pathname.split("/").slice(0, 2).join("/");
+      location.replace((base.length > 1 ? base + "/" : "/") + "#/dashboard");
+    </script>
+  </head>
+  <body>
+    <p>Taking you to the terminal… <a href="/">continue</a></p>
+  </body>
+</html>

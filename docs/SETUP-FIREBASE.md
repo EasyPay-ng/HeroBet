@@ -1,71 +1,103 @@
-# HeroBet — Firebase setup guide
+# HeroBet — Firebase setup
 
-The web app (`web/`) is wired to the `herobet` Firebase project. Do these
-console steps once (~5 minutes) to move from **Demo mode** (browser-local
-data) to **Firestore live** (real accounts, shared bets, live feeds).
+The app is wired to the **`herobet`** Firebase project
+(`web/src/firebase.js`). Until Firestore answers, HeroBet runs in **local
+mode**: everything works, but your desk is stored in that browser only and the
+leaderboard and shared trade tape stay empty. The chip in the top bar tells you
+which mode you're in.
+
+These console steps take about five minutes.
 
 ## 1. Enable Firestore
 
 Firebase Console → **Build → Firestore Database → Create database**
-- Mode: **Start in production mode** (the rules below lock it down properly)
-- Location: `europe-west1` or `us-central1` (pick closest to your users — NG → europe-west)
 
-## 2. Enable Authentication providers
+- Mode: **Start in production mode** (the rules below lock it down properly)
+- Location: pick the region closest to your users — for Nigeria, `europe-west1`
+
+## 2. Enable Authentication
 
 Firebase Console → **Build → Authentication → Get started → Sign-in method**
-- Enable **Anonymous** (guest heroes)
-- Enable **Email/Password** (permanent accounts)
 
-Also add your deploy domains under **Authentication → Settings → Authorized
-domains** (localhost is already allowed for development).
+- Enable **Anonymous** — powers the "Continue as guest" button
+- Enable **Email/Password** — permanent accounts
+
+Then **Authentication → Settings → Authorized domains**: add wherever you host
+it (`easypay-ng.github.io`, any custom domain, and the Arena preview host if you
+want sign-in to work in the live preview). `localhost` is allowed by default.
 
 ## 3. Deploy the security rules
 
-Option A (console): **Firestore → Rules** → paste the contents of
-`firestore.rules` from the repo root → Publish.
+**Option A — console:** Firestore → **Rules** → paste
+[`firestore.rules`](../firestore.rules) from the repo root → **Publish**.
 
-Option B (CLI):
+**Option B — CLI:**
+
 ```bash
 npm i -g firebase-tools
 firebase login
-firebase init firestore   # select project "herobet", keep default files, then overwrite with repo rules
+firebase init firestore     # select project "herobet", keep defaults
+cp firestore.rules .        # then overwrite the generated file with the repo copy
 firebase deploy --only firestore:rules
 ```
 
 ## 4. Verify
 
-Reload the app — the top bar chip should show **"Firestore live"**.
-Sign in as guest → you get a ₦10,000 demo credit → place a Crash bet →
-check Firestore console: `users/`, `wallets/{uid}`, `wallets/{uid}/ledger/`,
-`bets/` documents appear.
+Reload the app. The top-bar chip should stop saying *Local mode*. Then:
+
+1. Click **Open account → Continue as guest**
+2. Open the terminal and buy something
+3. In the Firestore console you should now see
+   `users/`, `accounts/{uid}`, `accounts/{uid}/positions/`,
+   `accounts/{uid}/orders/`, `accounts/{uid}/fills/`,
+   `accounts/{uid}/ledger/` and a row in `tape/`
 
 ## Data model
 
 | Path | Contents |
 |---|---|
-| `users/{uid}` | profile: name, email, createdAt |
-| `wallets/{uid}` | cached balance (NGN) — always changed together with a ledger entry |
-| `wallets/{uid}/ledger/{id}` | append-only transactions: deposit, withdrawal, bet, payout, demo-grant, rain-demo |
-| `bets/{id}` | every bet: game, roundId, mode, stake, autoCashout, status, multiplier, payout, `hedge` flag, `qualifyVolume` (Classic crash-side volume counting toward Gift Drop eligibility) |
-| `config/crash` | shared seed for deterministic crash rounds (rotate for production fairness) |
+| `users/{uid}` | private profile: name, email, createdAt |
+| `profiles/{uid}` | **public** leaderboard row: name, equity, pnlPct, trades (shape-validated by the rules) |
+| `accounts/{uid}` | `cash`, `reserved` (short margin), `deposits`, `startingCash`, `trades` |
+| `accounts/{uid}/positions/{symbol}` | signed `qty`, `avgPrice`, `realized`, `fees` — FX symbols are stored with `/` encoded as `_` |
+| `accounts/{uid}/orders/{id}` | side, type, qty, limit/stop price, status, fill details |
+| `accounts/{uid}/fills/{id}` | immutable executions (price, fee, realised P&L) |
+| `accounts/{uid}/ledger/{id}` | append-only cash journal — never edited or deleted |
+| `accounts/{uid}/watchlist/{symbol}` | starred markets |
+| `tape/{id}` | public cross-user trade tape |
+| `config/app` | read-only reachability probe; create it if you want, it isn't required |
 
-## Crash rounds without a server (current design)
+### How the money stays consistent
 
-All clients compute identical rounds from the shared seed: round `i`'s crash
-point is `H(seed, i)`, and the schedule (8s betting → flight → 4s settle) is
-anchored to a fixed epoch. This gives shared, time-synchronised rounds with
-zero backend — good enough for the demo. **Caveat:** anyone who knows the
-seed can precompute outcomes, so production must move round generation
-server-side (commit/reveal) — see below.
+`execute()` in `web/src/backend.js` runs **one Firestore transaction** that
+reads the account, position and order, then writes all five documents (account,
+position, order, fill, ledger) together. A fill can never update the balance
+without journalling a matching ledger entry, and an order can never be filled
+twice.
 
-## Production lockdown checklist (before real money)
+## What the rules do today
 
-1. **Cloud Functions**: bet settlement, wallet credits, dice rolls, crash
-   round generation (commit/reveal), Gift Drop rain draws & eligibility
-   (the 30% draw must be server-side — a client draw is cheatable).
-2. Flip the demo-grade allowances in `firestore.rules` to `if false` for
-   `wallets` and `bets` writes; only Functions (Admin SDK) write them.
-3. Enable **App Check** (reCAPTCHA v3) to block non-app traffic.
-4. Rotate `config/crash` seed; publish hash chain for provable fairness.
-5. Payments: Paystack/Flutterwave for deposits & withdrawals; KYC flow.
-6. Licensing & responsible-gambling requirements for your target markets.
+- Everything under `accounts/{uid}` is readable and writable **only by that
+  user**. No cross-account access, ever.
+- `fills` can't be edited after creation; `ledger` can't be edited *or* deleted.
+- `profiles` and `tape` are world-readable but write-validated: field whitelist,
+  type checks and length limits, so they can't be abused as free storage.
+- Everything else is denied by default.
+
+They do **not** stop a user from editing their own paper balance — that's
+acceptable while the capital is simulated, and it's the first thing you change
+if it ever isn't.
+
+## Production lockdown checklist
+
+1. **Cloud Functions** take over order matching, fills, balance mutations and
+   resting-order triggers (the client monitor becomes display-only).
+2. Change `accounts/{uid}` `allow create, update` to `if false` — only the
+   Admin SDK writes balances.
+3. Enable **App Check** (reCAPTCHA v3) and require it in the rules.
+4. Add Firestore composite indexes if you extend the order/fill queries.
+5. Sign a commercial market-data agreement (see
+   [`MARKET-DATA.md`](MARKET-DATA.md) — the free endpoints aren't licensed for
+   redistribution).
+6. Only then: KYC/AML, a regulated broker or exchange partner, and the licences
+   your market requires.
