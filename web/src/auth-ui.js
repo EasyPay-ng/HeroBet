@@ -12,7 +12,7 @@ export function openAuthModal() {
           <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224"/>
         </svg>
         <h2>JOIN THE HEROES</h2>
-        <p>One account for Crash, Dice, Wallet & Gift Drop.</p>
+        <p>One account for Prediction Pools, Wallet & demo games.</p>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab active" data-tab="in">Sign in</button>
@@ -36,7 +36,7 @@ export function openAuthModal() {
       </form>
       <div class="auth-or"><span>or</span></div>
       <button id="authGuest" class="btn ghost wide">⚡ Continue as guest</button>
-      <p class="auth-fine">New accounts get a ₦10,000 demo credit. 18+ · Play responsibly.</p>
+      <p class="auth-fine">New accounts get a ₦10,000 demo credit for testing pool tickets. 18+ · Play responsibly.</p>
     </div>
     `
   );

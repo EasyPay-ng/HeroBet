@@ -212,7 +212,8 @@ export async function initBackend() {
 export function onAuth(cb) {
   if (mode === "local") {
     listeners.auth.push(cb);
-    cb(localUser());
+    user = localUser();
+    cb(user);
     return () => (listeners.auth = listeners.auth.filter((f) => f !== cb));
   }
   return onAuthStateChanged(auth, async (fu) => {
@@ -246,7 +247,11 @@ const authErr = (e) => {
 };
 
 export async function signInGuest() {
-  if (mode === "local") return localUser();
+  if (mode === "local") {
+    user = localUser();
+    emit("auth", user);
+    return user;
+  }
   try {
     const cred = await signInAnonymously(auth);
     const name = "Hero-" + (1000 + Math.floor(Math.random() * 9000));
@@ -337,11 +342,12 @@ export async function debit({ type, amount, note, ref }) {
 }
 
 // ----- bets -----
-// bet: {game, roundId, roundStart, mode, stake, autoCashout?, hedge?, rainLeg?}
+// bet: {game, roundId?, marketId?, roundStart?, mode, stake, autoCashout?, hedge?, rainLeg?}
 export async function placeBet(bet) {
   if (!user) throw new Error("AUTH");
+  const betNote = bet.game === "prediction" ? `Prediction · ${bet.marketTitle || bet.mode}` : bet.game + " · " + bet.mode;
   if (mode === "local") {
-    localApply(-bet.stake, "bet", bet.game + " · " + bet.mode, null);
+    localApply(-bet.stake, "bet", betNote, null);
     const bets = lsGet(LS.bets, []);
     const id = "b" + Date.now() + Math.random().toString(36).slice(2, 6);
     bets.unshift({
@@ -358,7 +364,7 @@ export async function placeBet(bet) {
     emit("bets", null);
     return id;
   }
-  await fsApply(user.uid, -bet.stake, "bet", bet.game + " · " + bet.mode, null);
+  await fsApply(user.uid, -bet.stake, "bet", betNote, null);
   const ref = await addDoc(collection(db, "bets"), {
     ...bet,
     uid: user.uid,
@@ -430,6 +436,32 @@ export function subscribeRoundBets(roundId, cb) {
       cb(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      ),
+    () => cb([])
+  );
+}
+
+
+export function subscribePredictionBets(marketId, cb) {
+  if (mode === "local") {
+    const send = () =>
+      cb(
+        lsGet(LS.bets, [])
+          .filter((b) => b.game === "prediction" && b.marketId === marketId)
+          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      );
+    listeners.bets.push(send);
+    send();
+    return () => (listeners.bets = listeners.bets.filter((f) => f !== send));
+  }
+  return onSnapshot(
+    query(collection(db, "bets"), where("marketId", "==", marketId)),
+    (snap) =>
+      cb(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((b) => b.game === "prediction")
           .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
       ),
     () => cb([])

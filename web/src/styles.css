@@ -1232,3 +1232,177 @@ main {
   .incoming-sub { display: none; }
   .footer { padding-bottom: 90px; }
 }
+
+/* ---------- prediction pools ---------- */
+.pool-explainer {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 18px;
+  margin-bottom: 26px;
+  align-items: center;
+}
+.pool-explainer h2 {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 4vw, 34px);
+  margin: 8px 0 8px;
+  color: var(--gold-hi);
+}
+.pool-explainer p { color: var(--muted); font-size: 14px; }
+.pool-steps { display: grid; gap: 10px; }
+.pool-steps div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line-soft);
+  background: rgba(5, 10, 20, 0.42);
+}
+.pool-steps strong {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  color: #241a03;
+  background: linear-gradient(180deg, var(--gold-hi), var(--gold));
+  font-family: var(--font-display);
+}
+.pool-steps span { color: var(--ink); font-size: 13px; font-weight: 700; }
+
+.markets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+.market-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: linear-gradient(180deg, #15213c, var(--navy-900));
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px;
+  overflow: hidden;
+}
+.market-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.market-kicker {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.market-kicker span {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-hi);
+  border: 1px solid rgba(255, 197, 61, 0.25);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(255, 197, 61, 0.07);
+}
+.market-card h3 { font-size: 17px; line-height: 1.25; margin-bottom: 5px; }
+.market-card p { font-size: 12.5px; color: var(--muted); max-width: 680px; }
+
+.pool-meter {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  background: rgba(5, 10, 20, 0.38);
+  border-radius: 14px;
+}
+.pool-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 9px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pool-meter-head strong { color: var(--gold-hi); font-size: 18px; font-variant-numeric: tabular-nums; }
+.pool-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--navy-900);
+  border: 1px solid var(--line-soft);
+}
+.pool-bar span:nth-child(1) { background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
+.pool-bar span:nth-child(2) { background: linear-gradient(90deg, #2fca7a, var(--good)); }
+.pool-bar span:nth-child(3) { background: linear-gradient(90deg, var(--crimson-2), var(--crimson)); }
+.pool-fee-line { margin-top: 8px; font-size: 11px; color: #6d7fa3; }
+
+.outcome-grid { display: grid; gap: 10px; }
+.outcome-btn {
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(5, 10, 20, 0.38);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.outcome-btn:hover:not(:disabled) { border-color: rgba(255, 197, 61, 0.55); transform: translateY(-1px); }
+.outcome-btn:disabled { cursor: not-allowed; opacity: 0.8; }
+.outcome-btn.selected {
+  border-color: rgba(255, 197, 61, 0.75);
+  background: rgba(255, 197, 61, 0.09);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.outcome-btn.winner {
+  border-color: rgba(61, 220, 132, 0.7);
+  background: rgba(61, 220, 132, 0.08);
+}
+.outcome-btn span { font-size: 13px; font-weight: 800; }
+.outcome-btn strong { font-size: 16px; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+.outcome-btn em { font-style: normal; color: var(--muted); font-size: 11.5px; }
+
+.market-bet-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+}
+.market-bet-row .field { margin-bottom: 0; }
+.estimate-box {
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(5, 10, 20, 0.38);
+}
+.estimate-box span, .estimate-box em { display: block; color: #6d7fa3; font-size: 11px; font-style: normal; }
+.estimate-box strong { display: block; color: var(--good); font-size: 20px; font-variant-numeric: tabular-nums; }
+.market-foot {
+  display: flex;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+  color: #6d7fa3;
+  font-size: 11px;
+}
+.market-preview .gc-art { font-size: 36px; }
+
+@media (max-width: 1060px) {
+  .pool-explainer { grid-template-columns: 1fr; }
+  .market-bet-row { grid-template-columns: 1fr 1fr; }
+  .market-bet-row .btn { grid-column: 1 / -1; width: 100%; }
+}
+
+@media (max-width: 620px) {
+  .markets-grid { grid-template-columns: 1fr; }
+  .market-top, .market-bet-row { grid-template-columns: 1fr; display: grid; }
+  .market-bet-row .btn { grid-column: auto; }
+}
