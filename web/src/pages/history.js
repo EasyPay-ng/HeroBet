@@ -1,22 +1,34 @@
 // HeroBet — History page (my bets + transactions)
-import { $, esc, fmtN, fmtMult, timeAgo } from "../ui.js";
+import { $, $$, esc, fmtN, fmtMult, timeAgo } from "../ui.js";
 import { currentUser, subscribeRecentBets, subscribeLedger } from "../backend.js";
 
 const template = `
 <section class="page-head">
   <div>
     <h1>HISTORY</h1>
-    <p class="sub">Your bets & transactions</p>
+    <p class="sub">Your prediction tickets, demo bets & transactions</p>
   </div>
 </section>
 
 <div class="bet-tabs hist-tabs">
-  <button class="bet-tab active" data-htab="bets">My bets</button>
+  <button class="bet-tab active" data-htab="bets">My tickets</button>
   <button class="bet-tab" data-htab="tx">Transactions</button>
 </div>
 
 <div class="card"><div class="live-table" id="histTable"></div></div>
 `;
+
+function gameLabel(b) {
+  if (b.game === "prediction") return "Prediction";
+  if (b.game === "crash") return "Crash demo";
+  if (b.game === "dice") return "Dice demo";
+  return b.game || "Bet";
+}
+
+function marketLabel(b) {
+  if (b.game === "prediction") return `${esc(b.marketTitle || "Prediction pool")} · ${esc(b.outcome || b.mode)}`;
+  return `${esc(b.mode)}${b.hedge ? ' <span class="you">(hedge)</span>' : ""}`;
+}
 
 export const historyPage = {
   mount(outlet) {
@@ -32,18 +44,18 @@ export const historyPage = {
         return;
       }
       if (tab === "bets") {
-        if (!bets.length) return (box.innerHTML = `<div class="empty">No bets yet — Classic Crash is waiting ⚡</div>`);
+        if (!bets.length) return (box.innerHTML = `<div class="empty">No tickets yet — prediction pools are waiting.</div>`);
         box.innerHTML = `<table><thead><tr>
-          <th>Game</th><th>Market</th><th class="num">Stake</th><th class="num">Mult</th><th class="num">Payout</th><th>Status</th><th></th>
+          <th>Type</th><th>Market / Pick</th><th class="num">Stake</th><th class="num">Mult</th><th class="num">Payout</th><th>Status</th><th></th>
         </tr></thead><tbody>${bets
           .map(
             (b) => `<tr>
-            <td>${b.game === "crash" ? "Crash" : "Dice"}</td>
-            <td>${esc(b.mode)}${b.hedge ? ' <span class="you">(hedge)</span>' : ""}</td>
+            <td>${gameLabel(b)}</td>
+            <td>${marketLabel(b)}</td>
             <td class="num">${fmtN(b.stake)}</td>
-            <td class="num">${b.multiplier ? fmtMult(b.multiplier) : "—"}</td>
+            <td class="num">${b.multiplier ? fmtMult(b.multiplier) : b.payout && b.stake ? (b.payout / b.stake).toFixed(2) + "x" : "—"}</td>
             <td class="num">${b.payout ? `<span class="win">${fmtN(b.payout)}</span>` : `<span class="loss">—</span>`}</td>
-            <td class="dim">${b.status}</td>
+            <td class="dim">${esc(b.status || "placed")}</td>
             <td class="dim">${b.createdAt ? timeAgo(b.createdAt) : ""}</td>
           </tr>`
           )
@@ -70,7 +82,7 @@ export const historyPage = {
       const u = currentUser();
       bets = rows.filter((b) => u && b.uid === u.uid);
       render();
-    }, 50);
+    }, 80);
     const unTx = subscribeLedger((rows) => {
       txs = rows;
       render();

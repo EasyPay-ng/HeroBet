@@ -2,6 +2,7 @@ import "./styles.css";
 import { initBackend, onAuth, currentUser, subscribeWallet } from "./backend.js";
 import { startRouter, register } from "./router.js";
 import { lobbyPage } from "./pages/lobby.js";
+import { predictionsPage } from "./pages/predictions.js";
 import { crashPage } from "./pages/crash.js";
 import { dicePage } from "./pages/dice.js";
 import { promosPage } from "./pages/promos.js";
@@ -62,6 +63,8 @@ async function boot() {
 
   // routes
   register("/", lobbyPage);
+  register("/dashboard", lobbyPage);
+  register("/predictions", predictionsPage);
   register("/crash", crashPage);
   register("/dice", dicePage);
   register("/promos", promosPage);
@@ -72,7 +75,8 @@ async function boot() {
 
   // nav highlighting
   window.addEventListener("herobet:route", (e) => {
-    $$("[data-route]").forEach((a) => a.classList.toggle("active", a.dataset.route === e.detail));
+    const activeRoute = e.detail === "/" ? "/dashboard" : e.detail;
+    $$("[data-route]").forEach((a) => a.classList.toggle("active", a.dataset.route === activeRoute));
   });
 
   $("#depositBtn").addEventListener("click", () => (location.hash = "#/wallet"));

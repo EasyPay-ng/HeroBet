@@ -7,7 +7,7 @@ const template = `
 <section class="page-head">
   <div>
     <h1>WALLET</h1>
-    <p class="sub">Deposits, withdrawals & every transaction</p>
+    <p class="sub">Demo wallet for escrowed prediction-pool stakes and transactions</p>
   </div>
   <div class="page-head-right"><span class="chip">NGN · simulated</span></div>
 </section>
@@ -16,7 +16,7 @@ const template = `
   <div class="card balance-card" id="balanceCard"></div>
 
   <div class="card">
-    <div class="card-head"><h2>DEPOSIT</h2><span class="chip gold">instant · demo</span></div>
+    <div class="card-head"><h2>ADD DEMO FUNDS</h2><span class="chip gold">instant · demo</span></div>
     <div class="chips-row">
       <button class="mini" data-dep="1000">₦1,000</button>
       <button class="mini" data-dep="5000">₦5,000</button>
@@ -37,7 +37,7 @@ const template = `
       <input id="wdAmount" type="number" min="1000" step="100" placeholder="e.g. 5000" />
     </label>
     <button class="btn ghost wide" id="wdBtn">Simulate withdrawal</button>
-    <p class="bet-note">Real payments (Paystack / Flutterwave / bank transfer) arrive with the payments milestone — until then all money on HeroBet is simulated demo credit.</p>
+    <p class="bet-note">Real payments, escrow segregation and KYC/AML arrive with the payments milestone — until then all money on HeroBet is simulated demo credit.</p>
   </div>
 </div>
 
@@ -81,7 +81,7 @@ export const walletPage = {
       $("#balanceCard").innerHTML = !u
         ? `<p class="dim">Sign in to open your wallet.</p><button class="btn wide" id="wSignin">Sign in</button>`
         : `<div class="wallet-big">${w ? fmtN(w.balance) : "—"}</div>
-           <p class="dim">${esc(u.name)} · demo balance (simulated NGN)</p>`;
+           <p class="dim">${esc(u.name)} · demo balance for prediction-pool testing</p>`;
       const b = $("#wSignin");
       if (b) b.addEventListener("click", openAuthModal);
     };

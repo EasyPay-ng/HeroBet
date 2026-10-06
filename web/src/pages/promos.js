@@ -1,67 +1,67 @@
-// HeroBet — Promotions page (Gift Drop flagship + upcoming promos)
+// HeroBet — Pool rules / operator-risk explanation.
 const template = `
 <section class="page-head">
   <div>
-    <h1>PROMOTIONS</h1>
-    <p class="sub">Hero rewards, earned the heroic way</p>
+    <h1>POOL RULES</h1>
+    <p class="sub">How HeroBet can run prediction markets without paying winnings out of pocket</p>
   </div>
 </section>
 
 <section class="card promo-hero">
-  <div class="promo-badge">⚡ FLAGSHIP</div>
-  <h2>GIFT DROP</h2>
-  <p class="promo-tag">Catch it. Claim it. Win it.</p>
+  <div class="promo-badge">⚡ PEER-TO-PEER MODEL</div>
+  <h2>WINNERS SHARE THE POOL</h2>
+  <p class="promo-tag">No fixed house odds · no operator-funded jackpot · transparent fee.</p>
   <div class="promo-grid">
     <div>
-      <h3>The round</h3>
+      <h3>1. Stakes are escrowed</h3>
       <ul>
-        <li>One round <strong>every hour</strong>, 9:35am → 11:35pm (15 rounds/day)</li>
-        <li>Rain strikes at a <strong>random second inside :35–:45</strong> — never later</li>
-        <li><strong>59-second warning</strong> banner before the rain starts</li>
-        <li>Gifts fall for up to 60s — the progress bar <strong>only depletes</strong> as heroes claim</li>
+        <li>Every prediction ticket moves the player's stake into that market pool.</li>
+        <li>The visible pool total is the source of future payouts.</li>
+        <li>HeroBet does not promise a payout larger than the pool can cover.</li>
+        <li>Demo mode uses simulated NGN and seeded community liquidity for testing.</li>
       </ul>
     </div>
     <div>
-      <h3>Eligibility</h3>
+      <h3>2. Results are resolved</h3>
       <ul>
-        <li>Qualify with Classic stakes placed <strong>at or before 20 minutes before rain start</strong></li>
-        <li>Day rounds (9:35–5:35): <strong>₦5,000</strong> on Classic · gift <strong>₦500</strong></li>
-        <li>Evening rounds (6:35–11:35): <strong>₦10,000</strong> on Classic · gift <strong>₦1,000</strong></li>
-        <li>The one-click <strong>hedge</strong> on Classic Crash costs a flat ₦220 (day) / ₦440 (evening)</li>
+        <li>Markets close before settlement so no one can bet after the result is known.</li>
+        <li>The demo resolver picks an outcome automatically for testing.</li>
+        <li>Production should use an admin/oracle result signer and Cloud Functions.</li>
+        <li>Disputed/void market handling can refund stakes from escrow.</li>
       </ul>
     </div>
     <div>
-      <h3>The draw</h3>
+      <h3>3. Payouts come from losers</h3>
       <ul>
-        <li>Winners are drawn at rain start: a <strong>random 30%</strong> of eligible heroes</li>
-        <li>10 eligible → 3 winners · hard cap of 100 winners per pool</li>
-        <li>Gifts are <strong>real cash, credited instantly</strong> — no wagering</li>
-        <li>Miss the tap and the gift stays in the pool — <em>claim it before it disappears</em></li>
+        <li>HeroBet takes a platform fee from the total pool.</li>
+        <li>Winning tickets split the remaining pool in proportion to stake size.</li>
+        <li>If too many people choose the winning side, each winner's return adjusts down.</li>
+        <li>This is a pari-mutuel model: platform revenue is fee-based, not house-risk based.</li>
       </ul>
     </div>
   </div>
   <div class="lh-ctas">
-    <a class="btn" href="#/gift-drop">▶ Play the Gift Drop demo</a>
-    <a class="btn ghost" href="#/crash">Qualify on Classic Crash</a>
+    <a class="btn" href="#/predictions">Browse prediction pools</a>
+    <a class="btn ghost" href="#/wallet">Open wallet</a>
   </div>
-  <p class="promo-fine">Gift Drop is shown here in demo form. Full live rounds land with the rain integration milestone. 18+ · Terms apply · Play responsibly.</p>
+  <p class="promo-fine">Important: this repository is still a demo. For real-money launch, use licensed operations, payment KYC/AML, server-side escrow, admin/oracle settlement, audit logs, responsible gaming controls, and locked Firestore rules.</p>
 </section>
 
 <div class="promo-row">
   <div class="card promo-soon">
-    <h3>🛡️ Hero Cashback</h3>
-    <p>A weekly shield against rough sessions — a share of net losses returned every Monday.</p>
-    <span class="gc-soon">COMING SOON</span>
+    <h3>🧾 Fee ledger</h3>
+    <p>Track fee reserve by market so operator revenue is transparent and separate from player escrow.</p>
+    <span class="gc-soon">NEXT</span>
   </div>
   <div class="card promo-soon">
-    <h3>⚡ Weekend Missions</h3>
-    <p>Complete heroic missions on Originals to unlock bonus credit and rain boosts.</p>
-    <span class="gc-soon">COMING SOON</span>
+    <h3>🔐 Server settlement</h3>
+    <p>Cloud Functions should settle markets and write payouts; clients should never self-credit real wallets.</p>
+    <span class="gc-soon">NEXT</span>
   </div>
   <div class="card promo-soon">
-    <h3>👑 Legend Leaderboard</h3>
-    <p>Monthly leaderboard for the highest multipliers survived on Classic Crash.</p>
-    <span class="gc-soon">COMING SOON</span>
+    <h3>📡 Oracle results</h3>
+    <p>Connect sports, weather, finance, or admin-signed result feeds for production-grade market resolution.</p>
+    <span class="gc-soon">NEXT</span>
   </div>
 </div>
 `;
