@@ -1,15 +1,20 @@
 {
-  "name": "herobet-web",
+  "name": "herobet-markets",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
+  "description": "HeroBet Markets — paper-trading terminal on live crypto, equity and FX data.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:engine": "node scripts/test-engine.mjs",
+    "test": "npm run test:engine && npm run test:pages",
+    "test:pages": "node scripts/test-pages.mjs"
   },
   "dependencies": {
-    "firebase": "^12.19.0"
+    "firebase": "^12.19.0",
+    "lightweight-charts": "^5.2.1"
   },
   "devDependencies": {
     "vite": "^7.1.0"

@@ -1,15 +1,16 @@
 rules_version = '2';
-// HeroBet — Cloud Firestore security rules (demo-grade, client-settled)
+
+// HeroBet Markets — paper-trading desk.
 //
-// Deploy: firebase deploy --only firestore:rules
-// (or paste into Firebase Console → Firestore Database → Rules)
+// Threat model for THIS build: client-side settlement with simulated capital.
+// Users may only ever touch their own account tree. Nothing here protects
+// against a user editing their own paper balance — that's fine while the money
+// is fake, and the lockdown steps below are what you flip before it isn't.
 //
-// DEMO GRADE: the client currently settles bets and wallet credits itself,
-// so a signed-in player can technically write their own wallet/bets.
-// This is acceptable ONLY while all money is simulated. Before real money:
-//   1. Deploy Cloud Functions for bet settlement + rain draws.
-//   2. Change wallets/bets writes to `allow write: if false` (admin/functions only).
-// See docs/SETUP-FIREBASE.md → "Production lockdown".
+// PRODUCTION LOCKDOWN (see docs/SETUP-FIREBASE.md):
+//   1. Move order matching + fills into Cloud Functions (Admin SDK).
+//   2. Change the accounts/{uid} write rules to `if false`.
+//   3. Enable App Check and require it here.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -17,48 +18,93 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+
     function isOwner(uid) {
       return signedIn() && request.auth.uid == uid;
     }
 
-    // profiles
+    // ── profiles ───────────────────────────────────────────────
+    // users/{uid}: private profile, owner only.
     match /users/{uid} {
-      allow read: if signedIn();
-      allow create, update: if isOwner(uid)
-        && request.resource.data.uid == uid;
-      allow delete: if false;
+      allow read, write: if isOwner(uid);
     }
 
-    // wallets — balance only changes via transactions that append a ledger entry
-    match /wallets/{uid} {
+    // profiles/{uid}: public leaderboard row. World-readable, owner-written,
+    // and shape-checked so it can't be used as free storage.
+    match /profiles/{uid} {
+      allow read: if true;
+      allow write: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'equity', 'pnlPct', 'trades', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.equity is number
+        && request.resource.data.pnlPct is number;
+    }
+
+    // ── trading account tree ───────────────────────────────────
+    // Everything under accounts/{uid} is strictly private to that user.
+    match /accounts/{uid} {
       allow read: if isOwner(uid);
-      // DEMO GRADE (see header). Lock down to `if false` with Cloud Functions.
-      allow create, update: if isOwner(uid);
+      // PRODUCTION: change to `if false` once Cloud Functions settle trades.
+      allow create, update: if isOwner(uid)
+        && request.resource.data.cash is number
+        && request.resource.data.cash >= 0;
       allow delete: if false;
 
+      match /positions/{symbol} {
+        allow read, write: if isOwner(uid);
+      }
+
+      match /orders/{orderId} {
+        allow read, write: if isOwner(uid);
+      }
+
+      // Executions are immutable once written. Delete stays open only so the
+      // owner can wipe the desk from Settings → Reset account.
+      match /fills/{fillId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid);
+        allow update: if false;
+        allow delete: if isOwner(uid);
+      }
+
+      // The cash ledger is strictly append-only — it is never edited or
+      // deleted, not even by a reset (which simply journals a new entry).
       match /ledger/{entryId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid);
         allow update, delete: if false;
       }
+
+      match /watchlist/{symbol} {
+        allow read, write: if isOwner(uid);
+      }
     }
 
-    // bets — public read (live feeds/tables), owner-writable while client-settled
-    match /bets/{betId} {
+    // ── public trade tape ──────────────────────────────────────
+    // Anyone can watch the desk; signed-in users append their own prints.
+    match /tape/{id} {
       allow read: if true;
       allow create: if signedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == 'placed'
-        && request.resource.data.payout == 0;
-      // DEMO GRADE: client settlement. Lock down with Cloud Functions.
-      allow update: if signedIn() && resource.data.uid == request.auth.uid;
-      allow delete: if false;
+        && request.resource.data.keys().hasOnly(['name', 'symbol', 'assetClass', 'side', 'qty', 'price', 'createdAt'])
+        && request.resource.data.symbol is string
+        && request.resource.data.symbol.size() <= 16
+        && request.resource.data.side in ['buy', 'sell']
+        && request.resource.data.qty is number
+        && request.resource.data.price is number;
+      allow update, delete: if false;
     }
 
-    // shared config (crash seed etc.) — read-only for clients
+    // ── app config ─────────────────────────────────────────────
+    // Read-only reachability probe + any future runtime flags.
     match /config/{docId} {
       allow read: if true;
-      allow write: if false; // manage via console / Cloud Functions
+      allow write: if false;
+    }
+
+    // Default deny.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

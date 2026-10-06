@@ -1,10 +1,11 @@
-name: Deploy HeroBet web to GitHub Pages
+name: Build & deploy HeroBet Markets
 
 on:
   push:
     branches:
       - main
-      - arena/c08a965e-herobet
+      - arena/f9ed3d24-herobet
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -31,17 +32,21 @@ jobs:
       - name: Install dependencies
         working-directory: web
         run: npm ci
+      - name: Test the paper-trading engine
+        working-directory: web
+        run: npm run test:engine
       - name: Build Vite app
         working-directory: web
         run: GITHUB_PAGES=true npm run build
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
 
   deploy:
-    # The repo currently protects the github-pages environment so only main can deploy.
-    # Feature branches still build successfully; merge to main to publish the site.
+    # The repo protects the github-pages environment so only main can deploy.
+    # Feature branches still build and test; merge to main to publish the site.
     if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages

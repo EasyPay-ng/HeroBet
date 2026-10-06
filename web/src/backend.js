@@ -1,13 +1,14 @@
-// HeroBet — data layer.
-// Primary backend: Firebase Auth + Cloud Firestore.
-// Fallback backend: localStorage ("demo mode") used automatically when
-// Firestore is not reachable / rules are not deployed yet, so the platform
-// is always usable. Same API for both — pages never branch on mode.
+// HeroBet — data layer for the paper-trading desk.
 //
-// Money rule: the wallet balance is only ever changed through credit()/debit()
-// which append a ledger entry in the same transaction. When Cloud Functions
-// take over settlement (see docs/SETUP-FIREBASE.md) the client loses write
-// access to wallets and the same ledger keeps working.
+// Primary backend : Firebase Auth + Cloud Firestore (your `herobet` project)
+// Fallback backend: localStorage, used automatically when Firestore isn't
+// reachable yet, so the terminal always works. Identical API for both — pages
+// never branch on mode.
+//
+// Money rule: cash and positions only ever move inside execute(), which writes
+// the account, the position, the order, a fill and a ledger entry in ONE
+// transaction. When you move settlement to Cloud Functions, flip the client
+// write rules off and this same ledger keeps working.
 
 import {
   onAuthStateChanged,
@@ -20,40 +21,61 @@ import {
 import {
   doc,
   getDoc,
+  getDocs,
   setDoc,
+  deleteDoc,
   collection,
   addDoc,
   updateDoc,
   onSnapshot,
   query,
-  where,
   orderBy,
-  limit,
+  limit as fsLimit,
   runTransaction,
 } from "firebase/firestore";
 import { auth, db } from "./firebase.js";
-import { toast } from "./ui.js";
+import { instrument, DEFAULT_WATCHLIST } from "./market/instruments.js";
+import { applyTrade, feeFor, checkAffordable, round2 } from "./engine/paper.js";
 
-export const DEMO_GRANT = 10000; // welcome demo credit (simulated NGN)
-export const UNDER15_COEFF = 2.757; // O/U Under 1.5 coefficient per Gift Drop spec
+export const STARTING_CASH = 100000; // USD paper capital
+export const ACCOUNT_CURRENCY = "USD";
 
 export let mode = "firestore"; // 'firestore' | 'local'
 export let modeReason = "";
-export let crashSeed = "herobet-default-seed-v1";
 
-let user = null; // {uid, name, email, local?}
+let user = null;
 
-// ---------- local (demo mode) primitives ----------
-const LS = {
-  uid: "hb_local_uid",
-  user: "hb_local_user",
-  wallet: "hb_local_wallet",
-  ledger: "hb_local_ledger",
-  bets: "hb_local_bets",
+/** Firestore doc ids can't contain "/" — FX symbols need encoding. */
+export const docKey = (symbol) => String(symbol).replace(/\//g, "_");
+
+// ─────────────────────────── tiny event bus (local mode) ───────────────────────────
+const bus = new Map();
+const on = (k, cb) => {
+  if (!bus.has(k)) bus.set(k, new Set());
+  bus.get(k).add(cb);
+  return () => bus.get(k).delete(cb);
+};
+const fire = (k) => {
+  for (const cb of bus.get(k) || []) {
+    try {
+      cb();
+    } catch (e) {
+      console.error(e);
+    }
+  }
 };
 
-const listeners = { auth: [], wallet: [], ledger: [], bets: [] };
-const emit = (k, v) => listeners[k].forEach((f) => f(v));
+// ─────────────────────────── localStorage store ───────────────────────────
+const LS = {
+  user: "hb_t_user",
+  account: "hb_t_account",
+  positions: "hb_t_positions",
+  orders: "hb_t_orders",
+  fills: "hb_t_fills",
+  ledger: "hb_t_ledger",
+  watch: "hb_t_watch",
+  tape: "hb_t_tape",
+};
 
 const lsGet = (k, d) => {
   try {
@@ -63,171 +85,168 @@ const lsGet = (k, d) => {
     return d;
   }
 };
-const lsSet = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
-function localUid() {
-  let u = localStorage.getItem(LS.uid);
+const lsSet = (k, v) => {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {
+    /* quota / private mode */
+  }
+};
+
+function localUser() {
+  let u = lsGet(LS.user, null);
   if (!u) {
-    u = "local-" + Math.random().toString(36).slice(2, 10);
-    localStorage.setItem(LS.uid, u);
+    u = {
+      uid: "local-" + Math.random().toString(36).slice(2, 10),
+      name: "Trader-" + (1000 + Math.floor(Math.random() * 9000)),
+      email: null,
+      local: true,
+    };
+    lsSet(LS.user, u);
   }
   return u;
 }
 
-function localUser() {
-  const existing = lsGet(LS.user, null);
-  if (existing) return existing;
-  const u = {
-    uid: localUid(),
-    name: "Hero-" + (1000 + Math.floor(Math.random() * 9000)),
-    email: null,
-    local: true,
+function freshAccount() {
+  return {
+    cash: STARTING_CASH,
+    reserved: 0,
+    startingCash: STARTING_CASH,
+    deposits: STARTING_CASH,
+    currency: ACCOUNT_CURRENCY,
+    trades: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
   };
-  lsSet(LS.user, u);
-  return u;
 }
 
-function localWallet() {
-  let w = lsGet(LS.wallet, null);
-  if (!w) {
-    w = { balance: DEMO_GRANT };
-    lsSet(LS.wallet, w);
+function localAccount() {
+  let a = lsGet(LS.account, null);
+  if (!a) {
+    a = freshAccount();
+    lsSet(LS.account, a);
     lsSet(LS.ledger, [
       {
-        id: "welcome",
-        type: "demo-grant",
-        amount: DEMO_GRANT,
-        balanceAfter: DEMO_GRANT,
-        note: "Welcome demo credit",
+        id: "open",
+        type: "deposit",
+        amount: STARTING_CASH,
+        balanceAfter: STARTING_CASH,
+        note: "Opening paper capital",
         createdAt: Date.now(),
       },
     ]);
   }
-  return w;
+  return a;
 }
 
-function localApply(delta, type, note, ref) {
-  const w = localWallet();
-  const bal = w.balance + delta;
-  if (bal < 0) throw new Error("INSUFFICIENT");
-  w.balance = bal;
-  lsSet(LS.wallet, w);
-  const led = lsGet(LS.ledger, []);
-  led.unshift({
-    id: "t" + Date.now() + Math.random().toString(36).slice(2, 6),
-    type,
-    amount: delta,
-    balanceAfter: bal,
-    note: note || "",
-    ref: ref || null,
-    createdAt: Date.now(),
-  });
-  lsSet(LS.ledger, led.slice(0, 300));
-  emit("wallet", { balance: bal });
-  emit("ledger", null);
-  return bal;
+// ─────────────────────────── in-memory caches ───────────────────────────
+// Kept hot so the order monitor and the order ticket can validate instantly.
+const cache = {
+  account: null,
+  positions: [],
+  orders: [],
+  watchlist: [],
+};
+
+export function state() {
+  return cache;
 }
 
-// ---------- Firestore primitives ----------
-async function fsApply(uid, delta, type, note, ref) {
-  return runTransaction(db, async (tx) => {
-    const wref = doc(db, "wallets", uid);
-    const snap = await tx.get(wref);
-    if (!snap.exists()) throw new Error("NO_WALLET");
-    const bal = snap.data().balance + delta;
-    if (bal < 0) throw new Error("INSUFFICIENT");
-    tx.update(wref, { balance: bal, updatedAt: Date.now() });
-    tx.set(doc(collection(db, "wallets", uid, "ledger")), {
-      type,
-      amount: delta,
-      balanceAfter: bal,
-      note: note || "",
-      ref: ref || null,
-      createdAt: Date.now(),
-    });
-    return bal;
-  });
+export function positionFor(symbol) {
+  return cache.positions.find((p) => p.symbol === symbol) || { symbol, qty: 0, avgPrice: 0, realized: 0, fees: 0 };
 }
 
-async function fsEnsureUser(u) {
-  // Create users/{uid} + wallets/{uid} (with welcome demo credit) if missing.
-  await runTransaction(db, async (tx) => {
-    const uref = doc(db, "users", u.uid);
-    const wref = doc(db, "wallets", u.uid);
-    const [usnap, wsnap] = await Promise.all([tx.get(uref), tx.get(wref)]);
-    if (!usnap.exists()) {
-      tx.set(uref, {
-        uid: u.uid,
-        name: u.name,
-        email: u.email || null,
-        createdAt: Date.now(),
-      });
-    }
-    if (!wsnap.exists()) {
-      tx.set(wref, { uid: u.uid, balance: DEMO_GRANT, currency: "NGN", updatedAt: Date.now() });
-      tx.set(doc(db, "wallets", u.uid, "ledger", "welcome"), {
-        type: "demo-grant",
-        amount: DEMO_GRANT,
-        balanceAfter: DEMO_GRANT,
-        note: "Welcome demo credit",
-        createdAt: Date.now(),
-      });
-    }
-  });
+export function openOrders() {
+  return cache.orders.filter((o) => o.status === "open");
 }
 
-// ---------- backend API ----------
+// ─────────────────────────── init / auth ───────────────────────────
 export function currentUser() {
   return user;
 }
 
 export async function initBackend() {
   try {
-    const cfg = await Promise.race([
-      getDoc(doc(db, "config", "crash")),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT")), 6000)),
+    await Promise.race([
+      getDoc(doc(db, "config", "app")),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("TIMEOUT")), 7000)),
     ]);
-    if (cfg.exists() && cfg.data().seed) {
-      crashSeed = String(cfg.data().seed);
-    } else {
-      // try to create the config doc so all clients share the same seed
-      try {
-        await setDoc(doc(db, "config", "crash"), {
-          seed: crashSeed,
-          createdAt: Date.now(),
-          note: "auto-created default seed — rotate via console for production",
-        });
-      } catch (e) {
-        modeReason = "config-write-denied";
-      }
-    }
     mode = "firestore";
   } catch (e) {
     mode = "local";
     modeReason = e?.code || e?.message || "unreachable";
   }
-  return { mode, modeReason, crashSeed };
+  return { mode, modeReason };
+}
+
+async function fsEnsureAccount(u) {
+  await runTransaction(db, async (tx) => {
+    const uref = doc(db, "users", u.uid);
+    const aref = doc(db, "accounts", u.uid);
+    const [usnap, asnap] = await Promise.all([tx.get(uref), tx.get(aref)]);
+    if (!usnap.exists()) {
+      tx.set(uref, { uid: u.uid, name: u.name, email: u.email || null, createdAt: Date.now() });
+    }
+    if (!asnap.exists()) {
+      tx.set(aref, { uid: u.uid, ...freshAccount() });
+      tx.set(doc(db, "accounts", u.uid, "ledger", "open"), {
+        type: "deposit",
+        amount: STARTING_CASH,
+        balanceAfter: STARTING_CASH,
+        note: "Opening paper capital",
+        createdAt: Date.now(),
+      });
+      for (const s of DEFAULT_WATCHLIST) {
+        tx.set(doc(db, "accounts", u.uid, "watchlist", docKey(s)), { symbol: s, addedAt: Date.now() });
+      }
+    }
+  });
+}
+
+let stopCaches = [];
+
+function startCaches() {
+  stopCaches.forEach((f) => f());
+  stopCaches = [
+    subscribeAccount((a) => (cache.account = a)),
+    subscribePositions((p) => (cache.positions = p)),
+    subscribeOrders((o) => (cache.orders = o)),
+    subscribeWatchlist((w) => (cache.watchlist = w)),
+  ];
+}
+
+function clearCaches() {
+  stopCaches.forEach((f) => f());
+  stopCaches = [];
+  cache.account = null;
+  cache.positions = [];
+  cache.orders = [];
+  cache.watchlist = [];
 }
 
 export function onAuth(cb) {
   if (mode === "local") {
-    listeners.auth.push(cb);
+    const off = on("auth", () => cb(user));
     user = localUser();
+    localAccount();
+    startCaches();
     cb(user);
-    return () => (listeners.auth = listeners.auth.filter((f) => f !== cb));
+    return off;
   }
   return onAuthStateChanged(auth, async (fu) => {
     if (fu) {
-      const name = fu.displayName || (fu.email ? fu.email.split("@")[0] : "Hero-" + fu.uid.slice(0, 4));
-      user = { uid: fu.uid, name, email: fu.email || null };
+      const name = fu.displayName || (fu.email ? fu.email.split("@")[0] : "Trader-" + fu.uid.slice(0, 4));
+      user = { uid: fu.uid, name, email: fu.email || null, anonymous: fu.isAnonymous };
       try {
-        await fsEnsureUser(user);
+        await fsEnsureAccount(user);
       } catch (e) {
-        console.warn("ensureUser failed", e);
-        toast("Firestore isn't ready — see docs/SETUP-FIREBASE.md", "warn");
+        console.warn("ensureAccount failed", e);
       }
+      startCaches();
     } else {
       user = null;
+      clearCaches();
     }
     cb(user);
   });
@@ -236,25 +255,26 @@ export function onAuth(cb) {
 const authErr = (e) => {
   const code = e?.code || "";
   if (code === "auth/operation-not-allowed")
-    return "This sign-in method isn't enabled yet. Enable it in Firebase Console → Authentication → Sign-in method (see docs/SETUP-FIREBASE.md).";
-  if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found")
+    return "That sign-in method isn't enabled yet — turn it on in Firebase Console → Authentication → Sign-in method.";
+  if (["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(code))
     return "Wrong email or password.";
   if (code === "auth/email-already-in-use") return "That email already has an account — sign in instead.";
   if (code === "auth/weak-password") return "Password too weak — use at least 6 characters.";
   if (code === "auth/invalid-email") return "That email address doesn't look right.";
   if (code === "auth/network-request-failed") return "Network problem — check your connection.";
+  if (code === "auth/too-many-requests") return "Too many attempts — wait a minute and try again.";
   return e?.message?.replace("Firebase: ", "") || "Something went wrong.";
 };
 
 export async function signInGuest() {
   if (mode === "local") {
     user = localUser();
-    emit("auth", user);
+    fire("auth");
     return user;
   }
   try {
     const cred = await signInAnonymously(auth);
-    const name = "Hero-" + (1000 + Math.floor(Math.random() * 9000));
+    const name = "Trader-" + (1000 + Math.floor(Math.random() * 9000));
     await updateProfile(cred.user, { displayName: name });
     return { uid: cred.user.uid, name, email: null };
   } catch (e) {
@@ -263,7 +283,7 @@ export async function signInGuest() {
 }
 
 export async function signUpEmail(email, password, name) {
-  if (mode === "local") throw new Error("Demo mode — email accounts need Firestore (see docs/SETUP-FIREBASE.md).");
+  if (mode === "local") throw new Error("Demo mode — email accounts need Firestore. See docs/SETUP-FIREBASE.md.");
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const displayName = (name || email.split("@")[0]).slice(0, 24);
@@ -275,7 +295,7 @@ export async function signUpEmail(email, password, name) {
 }
 
 export async function signInEmail(email, password) {
-  if (mode === "local") throw new Error("Demo mode — email accounts need Firestore (see docs/SETUP-FIREBASE.md).");
+  if (mode === "local") throw new Error("Demo mode — email accounts need Firestore. See docs/SETUP-FIREBASE.md.");
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
     return { uid: cred.user.uid, name: cred.user.displayName || email.split("@")[0], email };
@@ -286,184 +306,581 @@ export async function signInEmail(email, password) {
 
 export async function signOut() {
   if (mode === "local") {
-    localStorage.removeItem(LS.user);
     user = null;
-    emit("auth", null);
+    clearCaches();
+    fire("auth");
     return;
   }
   await fbSignOut(auth);
 }
 
-// ----- wallet -----
-export function subscribeWallet(cb) {
+// ─────────────────────────── subscriptions ───────────────────────────
+export function subscribeAccount(cb) {
   if (mode === "local") {
-    listeners.wallet.push(cb);
-    cb({ balance: localWallet().balance });
-    return () => (listeners.wallet = listeners.wallet.filter((f) => f !== cb));
+    const send = () => cb(localAccount());
+    const off = on("account", send);
+    send();
+    return off;
   }
   if (!user) {
     cb(null);
     return () => {};
   }
   return onSnapshot(
-    doc(db, "wallets", user.uid),
-    (snap) => cb(snap.exists() ? { balance: snap.data().balance } : null),
+    doc(db, "accounts", user.uid),
+    (s) => cb(s.exists() ? s.data() : null),
     () => cb(null)
   );
 }
 
-export function subscribeLedger(cb) {
+export function subscribePositions(cb) {
   if (mode === "local") {
-    listeners.ledger.push(cb);
-    cb(lsGet(LS.ledger, []));
-    return () => (listeners.ledger = listeners.ledger.filter((f) => f !== cb));
+    const send = () => cb(lsGet(LS.positions, []).filter((p) => p.qty));
+    const off = on("positions", send);
+    send();
+    return off;
   }
   if (!user) {
     cb([]);
     return () => {};
   }
   return onSnapshot(
-    query(collection(db, "wallets", user.uid, "ledger"), orderBy("createdAt", "desc"), limit(60)),
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    collection(db, "accounts", user.uid, "positions"),
+    (s) => cb(s.docs.map((d) => d.data()).filter((p) => p.qty)),
     () => cb([])
   );
 }
 
-export async function credit({ type, amount, note, ref }) {
-  if (!user) throw new Error("AUTH");
-  if (mode === "local") return localApply(Math.round(amount), type, note, ref);
-  return fsApply(user.uid, Math.round(amount), type, note, ref);
-}
-
-export async function debit({ type, amount, note, ref }) {
-  if (!user) throw new Error("AUTH");
-  if (mode === "local") return localApply(-Math.round(amount), type, note, ref);
-  return fsApply(user.uid, -Math.round(amount), type, note, ref);
-}
-
-// ----- bets -----
-// bet: {game, roundId?, marketId?, roundStart?, mode, stake, autoCashout?, hedge?, rainLeg?}
-export async function placeBet(bet) {
-  if (!user) throw new Error("AUTH");
-  const betNote = bet.game === "prediction" ? `Prediction · ${bet.marketTitle || bet.mode}` : bet.game + " · " + bet.mode;
+export function subscribeOrders(cb, max = 100) {
   if (mode === "local") {
-    localApply(-bet.stake, "bet", betNote, null);
-    const bets = lsGet(LS.bets, []);
-    const id = "b" + Date.now() + Math.random().toString(36).slice(2, 6);
-    bets.unshift({
-      ...bet,
-      id,
-      uid: user.uid,
-      name: user.name,
-      status: "placed",
-      payout: 0,
-      multiplier: null,
-      createdAt: Date.now(),
-    });
-    lsSet(LS.bets, bets.slice(0, 200));
-    emit("bets", null);
+    const send = () => cb(lsGet(LS.orders, []).slice(0, max));
+    const off = on("orders", send);
+    send();
+    return off;
+  }
+  if (!user) {
+    cb([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, "accounts", user.uid, "orders"), orderBy("createdAt", "desc"), fsLimit(max)),
+    (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => cb([])
+  );
+}
+
+export function subscribeFills(cb, max = 100) {
+  if (mode === "local") {
+    const send = () => cb(lsGet(LS.fills, []).slice(0, max));
+    const off = on("fills", send);
+    send();
+    return off;
+  }
+  if (!user) {
+    cb([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, "accounts", user.uid, "fills"), orderBy("createdAt", "desc"), fsLimit(max)),
+    (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => cb([])
+  );
+}
+
+export function subscribeLedger(cb, max = 80) {
+  if (mode === "local") {
+    const send = () => cb(lsGet(LS.ledger, []).slice(0, max));
+    const off = on("ledger", send);
+    send();
+    return off;
+  }
+  if (!user) {
+    cb([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, "accounts", user.uid, "ledger"), orderBy("createdAt", "desc"), fsLimit(max)),
+    (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => cb([])
+  );
+}
+
+export function subscribeWatchlist(cb) {
+  if (mode === "local") {
+    const send = () => cb(lsGet(LS.watch, DEFAULT_WATCHLIST));
+    const off = on("watch", send);
+    send();
+    return off;
+  }
+  if (!user) {
+    cb(DEFAULT_WATCHLIST);
+    return () => {};
+  }
+  return onSnapshot(
+    collection(db, "accounts", user.uid, "watchlist"),
+    (s) => cb(s.docs.map((d) => d.data().symbol).filter(Boolean)),
+    () => cb(DEFAULT_WATCHLIST)
+  );
+}
+
+export async function toggleWatchlist(symbol) {
+  if (mode === "local") {
+    const w = lsGet(LS.watch, DEFAULT_WATCHLIST);
+    const next = w.includes(symbol) ? w.filter((s) => s !== symbol) : [...w, symbol];
+    lsSet(LS.watch, next);
+    fire("watch");
+    return next.includes(symbol);
+  }
+  if (!user) throw new Error("AUTH");
+  const ref = doc(db, "accounts", user.uid, "watchlist", docKey(symbol));
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    await deleteDoc(ref);
+    return false;
+  }
+  await setDoc(ref, { symbol, addedAt: Date.now() });
+  return true;
+}
+
+/** Public trade tape — every fill from every trader on this Firebase project. */
+export function subscribeTape(cb, max = 25) {
+  if (mode === "local") {
+    const send = () => cb(lsGet(LS.tape, []).slice(0, max));
+    const off = on("tape", send);
+    send();
+    return off;
+  }
+  return onSnapshot(
+    query(collection(db, "tape"), orderBy("createdAt", "desc"), fsLimit(max)),
+    (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => cb([])
+  );
+}
+
+export function subscribeLeaderboard(cb, max = 10) {
+  if (mode === "local") {
+    cb([]);
+    return () => {};
+  }
+  return onSnapshot(
+    query(collection(db, "profiles"), orderBy("pnlPct", "desc"), fsLimit(max)),
+    (s) => cb(s.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    () => cb([])
+  );
+}
+
+// ─────────────────────────── orders & fills ───────────────────────────
+
+/**
+ * Place an order.
+ * Market orders execute immediately against the live quote; limit/stop orders
+ * rest until the order monitor sees the price trade through them.
+ * @returns {Promise<{id:string, status:string}>}
+ */
+export async function placeOrder({ symbol, side, type, qty, limitPrice, stopPrice }, quote) {
+  if (!user) throw new Error("Sign in to trade");
+  const inst = instrument(symbol);
+  if (!inst) throw new Error("Unknown instrument");
+  qty = Number(qty);
+  if (!(qty > 0)) throw new Error("Enter a quantity");
+
+  const order = {
+    symbol,
+    assetClass: inst.class,
+    side,
+    type,
+    qty,
+    limitPrice: type === "limit" ? Number(limitPrice) : null,
+    stopPrice: type === "stop" ? Number(stopPrice) : null,
+    status: "open",
+    filledQty: 0,
+    avgFill: 0,
+    fee: 0,
+    realized: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  if (type === "market") {
+    const price = quote?.execPrice || quote?.price;
+    if (!price) throw new Error("No live price for this market yet");
+    const chk = checkAffordable(
+      { cash: cache.account?.cash || 0, reserved: cache.account?.reserved || 0 },
+      positionFor(symbol),
+      inst,
+      { side, qty, price }
+    );
+    if (!chk.ok) throw new Error(`${chk.reason} — short by $${chk.shortfall.toFixed(2)}`);
+    const id = await createOrder(order);
+    await execute(id, price);
+    return { id, status: "filled" };
+  }
+
+  const ref = type === "limit" ? Number(limitPrice) : Number(stopPrice);
+  if (!(ref > 0)) throw new Error(type === "limit" ? "Enter a limit price" : "Enter a stop price");
+  const id = await createOrder(order);
+  return { id, status: "open" };
+}
+
+async function createOrder(order) {
+  if (mode === "local") {
+    const id = "o" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const list = lsGet(LS.orders, []);
+    list.unshift({ id, ...order });
+    lsSet(LS.orders, list.slice(0, 200));
+    fire("orders");
     return id;
   }
-  await fsApply(user.uid, -bet.stake, "bet", betNote, null);
-  const ref = await addDoc(collection(db, "bets"), {
-    ...bet,
-    uid: user.uid,
-    name: user.name,
-    status: "placed",
-    payout: 0,
-    multiplier: null,
-    createdAt: Date.now(),
-  });
+  const ref = await addDoc(collection(db, "accounts", user.uid, "orders"), order);
   return ref.id;
 }
 
-// settle a bet; when creditAmount > 0 the payout is credited to the wallet
-export async function settleBet(betId, patch, creditAmount = 0, note = "payout") {
+export async function cancelOrder(id) {
   if (mode === "local") {
-    const bets = lsGet(LS.bets, []);
-    const b = bets.find((x) => x.id === betId);
-    if (b && b.status === "placed") {
-      Object.assign(b, patch);
-      lsSet(LS.bets, bets);
+    const list = lsGet(LS.orders, []);
+    const o = list.find((x) => x.id === id);
+    if (o && o.status === "open") {
+      o.status = "cancelled";
+      o.updatedAt = Date.now();
+      lsSet(LS.orders, list);
+      fire("orders");
     }
-    if (creditAmount > 0) localApply(creditAmount, "payout", note, betId);
-    emit("bets", null);
     return;
   }
-  try {
-    await updateDoc(doc(db, "bets", betId), patch);
-  } catch (e) {
-    console.warn("settle failed", e);
-  }
-  if (creditAmount > 0) {
+  await updateDoc(doc(db, "accounts", user.uid, "orders", id), { status: "cancelled", updatedAt: Date.now() });
+}
+
+/**
+ * Execute an open order at `price`. Atomically updates account, position,
+ * order, fill and ledger. Safe to call twice — a filled order is skipped.
+ */
+export async function execute(orderId, price) {
+  if (!user) throw new Error("AUTH");
+  price = Number(price);
+  if (!(price > 0)) throw new Error("BAD_PRICE");
+
+  if (mode === "local") return localExecute(orderId, price);
+
+  const uid = user.uid;
+  let tapeRow = null;
+
+  await runTransaction(db, async (tx) => {
+    const oRef = doc(db, "accounts", uid, "orders", orderId);
+    const aRef = doc(db, "accounts", uid);
+    const oSnap = await tx.get(oRef);
+    if (!oSnap.exists()) throw new Error("ORDER_GONE");
+    const order = oSnap.data();
+    if (order.status !== "open") return;
+
+    const pRef = doc(db, "accounts", uid, "positions", docKey(order.symbol));
+    const [aSnap, pSnap] = await Promise.all([tx.get(aRef), tx.get(pRef)]);
+    if (!aSnap.exists()) throw new Error("NO_ACCOUNT");
+
+    const acct = aSnap.data();
+    const pos = pSnap.exists() ? pSnap.data() : { symbol: order.symbol, qty: 0, avgPrice: 0, realized: 0, fees: 0 };
+    const inst = instrument(order.symbol);
+    const notional = order.qty * price;
+    const fee = feeFor(inst, notional);
+
+    const chk = checkAffordable({ cash: acct.cash, reserved: acct.reserved || 0 }, pos, inst, {
+      side: order.side,
+      qty: order.qty,
+      price,
+    });
+    if (!chk.ok) {
+      tx.update(oRef, { status: "rejected", reason: chk.reason, updatedAt: Date.now() });
+      return;
+    }
+
+    const res = applyTrade({ cash: acct.cash, reserved: acct.reserved || 0 }, pos, {
+      side: order.side,
+      qty: order.qty,
+      price,
+      fee,
+    });
+
+    tx.update(aRef, {
+      cash: res.cash,
+      reserved: res.reserved,
+      trades: (acct.trades || 0) + 1,
+      updatedAt: Date.now(),
+    });
+
+    if (res.position.qty === 0) {
+      tx.set(pRef, { ...res.position, symbol: order.symbol, assetClass: inst.class, closedAt: Date.now() });
+    } else {
+      tx.set(pRef, {
+        ...res.position,
+        symbol: order.symbol,
+        assetClass: inst.class,
+        openedAt: pos.openedAt || Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    tx.update(oRef, {
+      status: "filled",
+      filledQty: order.qty,
+      avgFill: price,
+      fee,
+      realized: res.realized,
+      filledAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    tx.set(doc(collection(db, "accounts", uid, "fills")), {
+      orderId,
+      symbol: order.symbol,
+      assetClass: inst.class,
+      side: order.side,
+      type: order.type,
+      qty: order.qty,
+      price,
+      notional: round2(notional),
+      fee,
+      realized: res.realized,
+      createdAt: Date.now(),
+    });
+
+    tx.set(doc(collection(db, "accounts", uid, "ledger")), {
+      type: order.side === "buy" ? "buy" : "sell",
+      amount: res.cashDelta,
+      balanceAfter: res.cash,
+      note: `${order.side === "buy" ? "Bought" : "Sold"} ${order.qty} ${order.symbol} @ ${price}`,
+      ref: orderId,
+      fee,
+      createdAt: Date.now(),
+    });
+
+    tapeRow = {
+      name: user.name,
+      symbol: order.symbol,
+      assetClass: inst.class,
+      side: order.side,
+      qty: order.qty,
+      price,
+      createdAt: Date.now(),
+    };
+  });
+
+  if (tapeRow) {
     try {
-      await fsApply(user.uid, creditAmount, "payout", note, betId);
-    } catch (e) {
-      console.warn("payout credit failed", e);
+      await addDoc(collection(db, "tape"), tapeRow);
+    } catch {
+      /* tape is best-effort */
     }
   }
 }
 
-export function subscribeRecentBets(cb, max = 15) {
-  if (mode === "local") {
-    const send = () => cb(lsGet(LS.bets, []).slice(0, max));
-    listeners.bets.push(send);
-    send();
-    return () => (listeners.bets = listeners.bets.filter((f) => f !== send));
+function localExecute(orderId, price) {
+  const orders = lsGet(LS.orders, []);
+  const order = orders.find((o) => o.id === orderId);
+  if (!order || order.status !== "open") return;
+
+  const acct = localAccount();
+  const positions = lsGet(LS.positions, []);
+  let pos = positions.find((p) => p.symbol === order.symbol);
+  if (!pos) {
+    pos = { symbol: order.symbol, qty: 0, avgPrice: 0, realized: 0, fees: 0 };
+    positions.push(pos);
   }
-  return onSnapshot(
-    query(collection(db, "bets"), orderBy("createdAt", "desc"), limit(max)),
-    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-    () => cb([])
-  );
+
+  const inst = instrument(order.symbol);
+  const notional = order.qty * price;
+  const fee = feeFor(inst, notional);
+  const chk = checkAffordable({ cash: acct.cash, reserved: acct.reserved || 0 }, pos, inst, {
+    side: order.side,
+    qty: order.qty,
+    price,
+  });
+  if (!chk.ok) {
+    order.status = "rejected";
+    order.reason = chk.reason;
+    order.updatedAt = Date.now();
+    lsSet(LS.orders, orders);
+    fire("orders");
+    return;
+  }
+
+  const res = applyTrade({ cash: acct.cash, reserved: acct.reserved || 0 }, pos, {
+    side: order.side,
+    qty: order.qty,
+    price,
+    fee,
+  });
+
+  acct.cash = res.cash;
+  acct.reserved = res.reserved;
+  acct.trades = (acct.trades || 0) + 1;
+  acct.updatedAt = Date.now();
+  lsSet(LS.account, acct);
+
+  Object.assign(pos, res.position, { symbol: order.symbol, assetClass: inst.class, updatedAt: Date.now() });
+  lsSet(LS.positions, positions);
+
+  Object.assign(order, {
+    status: "filled",
+    filledQty: order.qty,
+    avgFill: price,
+    fee,
+    realized: res.realized,
+    filledAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  lsSet(LS.orders, orders);
+
+  const fills = lsGet(LS.fills, []);
+  fills.unshift({
+    id: "f" + Date.now().toString(36),
+    orderId,
+    symbol: order.symbol,
+    assetClass: inst.class,
+    side: order.side,
+    type: order.type,
+    qty: order.qty,
+    price,
+    notional: round2(notional),
+    fee,
+    realized: res.realized,
+    createdAt: Date.now(),
+  });
+  lsSet(LS.fills, fills.slice(0, 200));
+
+  const ledger = lsGet(LS.ledger, []);
+  ledger.unshift({
+    id: "l" + Date.now().toString(36),
+    type: order.side,
+    amount: res.cashDelta,
+    balanceAfter: res.cash,
+    note: `${order.side === "buy" ? "Bought" : "Sold"} ${order.qty} ${order.symbol} @ ${price}`,
+    ref: orderId,
+    fee,
+    createdAt: Date.now(),
+  });
+  lsSet(LS.ledger, ledger.slice(0, 200));
+
+  const tape = lsGet(LS.tape, []);
+  tape.unshift({
+    id: "t" + Date.now().toString(36),
+    name: user?.name || "You",
+    symbol: order.symbol,
+    side: order.side,
+    qty: order.qty,
+    price,
+    createdAt: Date.now(),
+  });
+  lsSet(LS.tape, tape.slice(0, 50));
+
+  fire("account");
+  fire("positions");
+  fire("orders");
+  fire("fills");
+  fire("ledger");
+  fire("tape");
 }
 
-export function subscribeRoundBets(roundId, cb) {
+// ─────────────────────────── cash & admin ───────────────────────────
+export async function deposit(amount, note = "Paper capital top-up") {
+  if (!user) throw new Error("AUTH");
+  amount = round2(amount);
+  if (!(amount > 0)) throw new Error("Enter an amount");
+
   if (mode === "local") {
-    const send = () =>
-      cb(
-        lsGet(LS.bets, [])
-          .filter((b) => b.roundId === roundId)
-          .sort((a, b) => b.createdAt - a.createdAt)
-      );
-    listeners.bets.push(send);
-    send();
-    return () => (listeners.bets = listeners.bets.filter((f) => f !== send));
+    const a = localAccount();
+    a.cash = round2(a.cash + amount);
+    a.deposits = round2((a.deposits || 0) + amount);
+    a.updatedAt = Date.now();
+    lsSet(LS.account, a);
+    const led = lsGet(LS.ledger, []);
+    led.unshift({
+      id: "l" + Date.now().toString(36),
+      type: "deposit",
+      amount,
+      balanceAfter: a.cash,
+      note,
+      createdAt: Date.now(),
+    });
+    lsSet(LS.ledger, led.slice(0, 200));
+    fire("account");
+    fire("ledger");
+    return a.cash;
   }
-  return onSnapshot(
-    query(collection(db, "bets"), where("roundId", "==", roundId)),
-    (snap) =>
-      cb(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-      ),
-    () => cb([])
-  );
+
+  return runTransaction(db, async (tx) => {
+    const aRef = doc(db, "accounts", user.uid);
+    const snap = await tx.get(aRef);
+    if (!snap.exists()) throw new Error("NO_ACCOUNT");
+    const a = snap.data();
+    const cash = round2(a.cash + amount);
+    tx.update(aRef, { cash, deposits: round2((a.deposits || 0) + amount), updatedAt: Date.now() });
+    tx.set(doc(collection(db, "accounts", user.uid, "ledger")), {
+      type: "deposit",
+      amount,
+      balanceAfter: cash,
+      note,
+      createdAt: Date.now(),
+    });
+    return cash;
+  });
 }
 
-
-export function subscribePredictionBets(marketId, cb) {
+/** Wipe positions/orders and restore the opening balance. */
+export async function resetAccount() {
+  if (!user) throw new Error("AUTH");
   if (mode === "local") {
-    const send = () =>
-      cb(
-        lsGet(LS.bets, [])
-          .filter((b) => b.game === "prediction" && b.marketId === marketId)
-          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-      );
-    listeners.bets.push(send);
-    send();
-    return () => (listeners.bets = listeners.bets.filter((f) => f !== send));
+    lsSet(LS.account, freshAccount());
+    lsSet(LS.positions, []);
+    lsSet(LS.orders, []);
+    lsSet(LS.fills, []);
+    lsSet(LS.ledger, [
+      {
+        id: "open",
+        type: "deposit",
+        amount: STARTING_CASH,
+        balanceAfter: STARTING_CASH,
+        note: "Account reset",
+        createdAt: Date.now(),
+      },
+    ]);
+    ["account", "positions", "orders", "fills", "ledger"].forEach(fire);
+    return;
   }
-  return onSnapshot(
-    query(collection(db, "bets"), where("marketId", "==", marketId)),
-    (snap) =>
-      cb(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((b) => b.game === "prediction")
-          .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-      ),
-    () => cb([])
-  );
+  const uid = user.uid;
+  for (const sub of ["positions", "orders", "fills"]) {
+    const snap = await getDocs(collection(db, "accounts", uid, sub));
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+  }
+  await setDoc(doc(db, "accounts", uid), { uid, ...freshAccount() });
+  await addDoc(collection(db, "accounts", uid, "ledger"), {
+    type: "deposit",
+    amount: STARTING_CASH,
+    balanceAfter: STARTING_CASH,
+    note: "Account reset",
+    createdAt: Date.now(),
+  });
+}
+
+// ─────────────────────────── public profile (leaderboard) ───────────────────────────
+let lastPush = 0;
+
+export async function publishPerformance(summary) {
+  if (mode !== "firestore" || !user) return;
+  if (Date.now() - lastPush < 60000) return;
+  lastPush = Date.now();
+  try {
+    await setDoc(
+      doc(db, "profiles", user.uid),
+      {
+        uid: user.uid,
+        name: user.name,
+        equity: summary.equity,
+        pnlPct: summary.totalPnlPct,
+        trades: cache.account?.trades || 0,
+        updatedAt: Date.now(),
+      },
+      { merge: true }
+    );
+  } catch {
+    /* rules may block it — not critical */
+  }
 }

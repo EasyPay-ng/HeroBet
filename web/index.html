@@ -3,43 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HeroBet — Peer-to-Peer Prediction Pools</title>
-    <meta name="description" content="HeroBet — peer-to-peer prediction pools where winners are paid from the market pool, not from the operator's pocket. Demo build with simulated NGN." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230A1224'/%3E%3Cpath d='M18 4 9 18h5.5L13 28l10-14h-5.5L18 4z' fill='%23FFC53D'/%3E%3C/svg%3E" />
+    <meta name="theme-color" content="#070b16" />
+    <title>HeroBet — Trading Terminal</title>
+    <meta
+      name="description"
+      content="HeroBet is a paper-trading terminal on real market data — live crypto, US stocks and forex, with a full order book, limit and stop orders, and a marked-to-market portfolio."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070B16'/%3E%3Cpath d='M5 21l6-7 4 4 5-7 3 3 4-6' fill='none' stroke='%2316C784' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <!-- shared SVG gradients for gift/shield artwork -->
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-      <defs>
-        <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#FFE08A" />
-          <stop offset="1" stop-color="#E8A200" />
-        </linearGradient>
-        <linearGradient id="gCrimson" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#E23A4E" />
-          <stop offset="1" stop-color="#8E1B2E" />
-        </linearGradient>
-      </defs>
-    </svg>
-
     <div id="app">
       <header class="topbar">
-        <a class="brand" href="#/dashboard">
-          <svg viewBox="0 0 48 48" width="32" height="32" aria-hidden="true">
-            <path d="M24 3 6 9v14c0 11 7.6 19.4 18 22 10.4-2.6 18-11 18-22V9L24 3z" fill="url(#gGold)" />
-            <path d="M26.8 10 16 26h6.6L21 38l11-16h-6.6l1.4-12z" fill="#0A1224" />
+        <a class="brand" href="#/dashboard" aria-label="HeroBet home">
+          <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="#0E1526" />
+            <path d="M5 21l6-7 4 4 5-7 3 3 4-6" fill="none" stroke="#16C784" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="wordmark">HERO<em>BET</em></span>
+          <span class="wordmark">HERO<em>BET</em><small>markets</small></span>
         </a>
 
         <span id="modeChip" class="chip"><span class="dot"></span> connecting…</span>
 
         <div class="top-right">
-          <a class="wallet-chip" id="walletChip" href="#/wallet">₦ —</a>
-          <button class="btn small" id="depositBtn">Wallet</button>
+          <a class="equity-chip" id="equityChip" href="#/portfolio" title="Account equity">
+            <span class="ec-label">Equity</span><b>—</b>
+          </a>
+          <a class="btn small" href="#/wallet">Cash</a>
           <div id="authArea"></div>
         </div>
       </header>
@@ -49,22 +47,22 @@
       <div class="shell">
         <aside class="sidebar">
           <nav>
-            <div class="nav-sec">Markets</div>
-            <a data-route="/dashboard" href="#/dashboard">📊 <span>Dashboard</span></a>
-            <a data-route="/predictions" href="#/predictions">🔮 <span>Prediction Pools</span></a>
+            <div class="nav-sec">Trade</div>
+            <a data-route="/dashboard" href="#/dashboard"><span class="ic">◧</span><span>Desk</span></a>
+            <a data-route="/markets" href="#/markets"><span class="ic">≣</span><span>Markets</span></a>
+            <a data-route="/trade" href="#/trade/BTC-USD"><span class="ic">◉</span><span>Terminal</span></a>
             <div class="nav-sec">Account</div>
-            <a data-route="/wallet" href="#/wallet">💰 <span>Wallet</span></a>
-            <a data-route="/history" href="#/history">📜 <span>History</span></a>
-            <a data-route="/promos" href="#/promos">🧾 <span>Pool Rules</span></a>
-            <div class="nav-sec">Demo games</div>
-            <a data-route="/crash" href="#/crash">🚀 <span>Classic Crash</span></a>
-            <a data-route="/dice" href="#/dice">🎲 <span>Hero Dice</span></a>
-            <a data-route="/gift-drop" href="#/gift-drop">🎁 <span>Gift Drop demo</span></a>
+            <a data-route="/portfolio" href="#/portfolio"><span class="ic">▤</span><span>Portfolio</span></a>
+            <a data-route="/orders" href="#/orders"><span class="ic">⇅</span><span>Orders</span></a>
+            <a data-route="/wallet" href="#/wallet"><span class="ic">◈</span><span>Cash</span></a>
+            <div class="nav-sec">More</div>
+            <a data-route="/settings" href="#/settings"><span class="ic">⚙</span><span>Settings</span></a>
+            <a data-route="/about" href="#/about"><span class="ic">?</span><span>How it works</span></a>
           </nav>
           <div class="side-foot">
-            18+ · Play responsibly<br />
-            Demo build — simulated money<br />
-            Prediction payouts are pool-funded.
+            <strong>Paper trading</strong><br />
+            Real prices · simulated capital<br />
+            No deposits, no client funds.
           </div>
         </aside>
 
@@ -72,15 +70,19 @@
       </div>
 
       <nav class="bottomnav">
-        <a data-route="/dashboard" href="#/dashboard"><span>📊</span>Home</a>
-        <a data-route="/predictions" href="#/predictions"><span>🔮</span>Pools</a>
-        <a data-route="/wallet" href="#/wallet"><span>💰</span>Wallet</a>
-        <a data-route="/history" href="#/history"><span>📜</span>History</a>
-        <a data-route="/promos" href="#/promos"><span>🧾</span>Rules</a>
+        <a data-route="/dashboard" href="#/dashboard"><span>◧</span>Desk</a>
+        <a data-route="/markets" href="#/markets"><span>≣</span>Markets</a>
+        <a data-route="/trade" href="#/trade/BTC-USD"><span>◉</span>Trade</a>
+        <a data-route="/portfolio" href="#/portfolio"><span>▤</span>Book</a>
+        <a data-route="/wallet" href="#/wallet"><span>◈</span>Cash</a>
       </nav>
 
       <footer class="footer">
-        <p>HeroBet — demo build. Not a live gambling service; all balances are simulated. Prediction payouts use a pari-mutuel pool model: winners share participant stakes after fees. 18+ · Play responsibly.</p>
+        <p>
+          HeroBet Markets — a paper-trading simulator built on live public market data. Not investment advice,
+          not a broker, and not a route to real-money trading. Prices are provided by third-party venues and may be
+          delayed or unavailable.
+        </p>
       </footer>
     </div>
 
