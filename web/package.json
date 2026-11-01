@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "HeroBet Markets — paper-trading terminal on live crypto, equity and FX data.",
+  "description": "HeroBet Super Hero \u2014 a play-money crash game prototype.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
