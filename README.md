@@ -1,18 +1,35 @@
 # HeroBet — Super Hero
 
-HeroBet is a browser-only, play-money prototype of a superhero-themed crash game. In Classic mode, place up to two bets, watch the multiplier rise, and cash out before the hero flies away. Queue bets for the next flight at any time, including while the current flight is running. Classic also supports auto bet and auto cashout. In O/U mode, place up to two fixed-odds bets on whether the next flight ends at or above a selected coefficient (Over) or below it (Under). O/U bets settle at the end of the flight, with no cashout. Both modes share the demo balance and local activity log.
+HeroBet is a play-money Super Hero crash-game prototype, with a homepage,
+email/password signup and login, account dashboard, and dedicated game page.
+Classic lets players cash out before the flight ends; O/U lets them predict
+whether the flight ends at or above a coefficient. Both support two slips and
+next-round bets.
 
-**This is not a real-money betting product.** No deposits, withdrawals, authentication or shared multiplayer rounds are implemented. Round outcomes are generated locally in the browser and are not provably fair. The demo balance is stored in localStorage; game activity is held in memory. A production betting service would require a secure server-authoritative game and ledger, independent fairness audits, payment integration, age verification, responsible gambling controls and appropriate licensing.
+Signed-in demo balances and the last 30 settled bets are stored in Firestore.
+Guests can play without signing in using a browser-local balance. Game rounds
+are simulated separately in each browser, not shared between players. Demo
+accounts are client-writable and can be manipulated; simultaneous sessions can
+overwrite each other. **No real money, deposits, withdrawals or production
+betting are supported.** A secure gambling product needs a server-authoritative
+round engine and ledger, fairness audits, licensing, age verification and other
+protections.
 
-## Run locally
+## Setup and run
 
 ```bash
 cd web
 npm install
 npm run dev
+npm test
 npm run build
 ```
 
-Open the Vite URL in your browser. The legacy trading source remains in the repository for reference, but is no longer loaded by the game.
+The Firebase project must have Email/Password authentication and Firestore
+enabled, its hosting domains authorized, and the provided Firestore rules
+deployed. See [Firebase setup](docs/SETUP-FIREBASE.md). The legacy trading source
+remains for reference and is no longer loaded by the site.
 
-O/U odds are calculated from the demo crash distribution with a 3% house edge and rounded down to two decimal places. The displayed payout multiplier is fixed when the bet is placed.
+O/U odds use the demo crash distribution with a 3% house edge and are rounded
+down to two decimal places. The displayed payout multiplier is fixed when a bet
+is placed.
