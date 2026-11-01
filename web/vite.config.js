@@ -25,12 +25,6 @@ export default defineConfig({
         markets: resolve(root, "markets.html"),
         notfound: resolve(root, "404.html"),
       },
-      output: {
-        manualChunks: {
-          firebase: ["firebase/app", "firebase/auth", "firebase/firestore"],
-          charts: ["lightweight-charts"],
-        },
-      },
     },
   },
 });
