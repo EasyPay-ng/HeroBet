@@ -1,4 +1,6 @@
 import './game.css';
+// Initialise the configured Firebase project; game state remains local demo data.
+import { loadGameAccount, saveGameAccount, watchGameAccount } from './player.js';
 
 const app = document.querySelector('#app');
 const money = n => Math.max(0, n).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -45,15 +47,15 @@ app.innerHTML = `
   <header class="topbar"><div class="top-inner">
     <a href="./" class="brand" aria-label="HeroBet home"><span class="brand-mark">H<span>✦</span></span><span>HERO<span>BET</span><small>THE GAME IS ON</small></span></a>
     <div class="header-center"><span class="live-dot"></span> YOUR NEXT ADVENTURE AWAITS</div>
-    <div class="header-right"><div class="balance"><span>DEMO BALANCE</span><strong id="balance">₦0.00</strong></div><button class="reset-btn" id="reset">Reset balance</button></div>
+    <div class="header-right"><a class="game-nav-link" href="./">Home</a><a class="game-nav-link" href="./dashboard.html">Dashboard</a><div class="balance"><span>DEMO BALANCE</span><strong id="balance">₦0.00</strong><button type="button" id="syncStatus" class="sync-status" title="Retry a failed save">CONNECTING…</button></div><button class="reset-btn" id="reset" disabled>Reset balance</button></div>
   </div></header>
-  <main class="layout">
+  <div id="gameLoading" class="game-loading" role="status"><div><span class="game-loading-icon">✦</span><strong id="gameLoadingText">PREPARING YOUR FLIGHT…</strong><p id="gameLoadingDetail">Connecting your demo account.</p><button id="retryGame" hidden>Retry connection</button><a href="./">Back to home</a></div></div><main class="layout">
     <div class="page-heading"><div><div class="eyebrow"><span></span> THE ULTIMATE CRASH GAME</div><h1>SUPER <em>HERO</em><span class="heading-star">✦</span></h1><p>Ready for takeoff? Place your bet and cash out before the hero flies away.</p></div><div class="demo-pill"><span></span> FREE PLAY MODE</div></div>
     <div class="content-grid"><div class="main-column">
       <section class="game-shell" aria-label="Super Hero game">
         <div class="game-toolbar"><div class="game-title"><span class="game-icon">✦</span><div><strong>SUPER HERO</strong><small>THE SKY IS NOT THE LIMIT</small></div></div><div class="toolbar-right"><span class="round-indicator"><i></i> LIVE SIMULATION</span><span class="sound-mark" title="Sound is off">♪ <small>OFF</small></span></div></div>
         <div class="history-bar"><span class="history-label">PREVIOUS FLIGHTS <span>↗</span></span><div id="history" class="history-list"><span class="history-empty">Your round history will appear here</span></div></div>
-        <div class="flight-scene" id="scene"><div class="scene-grid"></div><div class="scene-overlay"></div><div class="scene-top"><span><i></i> HERO FLIGHT</span><span>ROUND IN PROGRESS</span></div><div class="flight-center"><div id="phaseLabel" class="phase-label">GET READY FOR TAKEOFF</div><div id="multiplier" class="multiplier">1.00<span>×</span></div><div id="phaseMessage" class="phase-message">Place your bets for the next round</div><div class="progress-track" id="progressTrack"><div id="progress"></div></div></div><div class="scene-bottom"><span>✦ &nbsp; THE SKY IS YOURS</span><span>HERO<span class="gold">BET</span> / 01</span></div></div>
+        <div class="flight-scene" id="scene"><div class="scene-grid"></div><div class="scene-overlay"></div><div class="flight-art" aria-hidden="true"></div><div class="scene-top"><span><i></i> HERO FLIGHT</span><span>ROUND IN PROGRESS</span></div><div class="flight-center"><div id="phaseLabel" class="phase-label">GET READY FOR TAKEOFF</div><div id="multiplier" class="multiplier">1.00<span>×</span></div><div id="phaseMessage" class="phase-message">Place your bets for the next round</div><div class="progress-track" id="progressTrack"><div id="progress"></div></div></div><div class="scene-bottom"><span>✦ &nbsp; THE SKY IS YOURS</span><span>HERO<span class="gold">BET</span> / 01</span></div></div>
         <div class="game-foot"><div><span class="foot-icon">✧</span><span><strong>HOW TO PLAY</strong><small>Bet. Watch it fly. Cash out in time.</small></span></div><button id="howBtn">Game rules <span>↗</span></button></div>
       </section>
       <div class="section-heading"><div><span class="section-index">01 / YOUR BETS</span><h2>Make your move<span>.</span></h2></div><p>Choose your stake and get ready to fly.</p></div>
@@ -71,7 +73,29 @@ app.innerHTML = `
 
 const $ = selector => document.querySelector(selector);
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const persist = () => { try { localStorage.setItem('herobet-demo-balance', String(state.balance)); } catch {} };
+let session = null, gameStarted = false, saveQueue = Promise.resolve(), saving = 0, latestSnapshot = null;
+function persist() {
+  if (!session?.user) { try { localStorage.setItem('herobet-demo-balance', String(state.balance)); } catch {} return; }
+  const snapshot = { balance: state.balance, bets: state.bets.map(b => ({ ...b })) };
+  latestSnapshot = snapshot; saving++; $('#syncStatus').textContent = 'SAVING DEMO…';
+  saveQueue = saveQueue.catch(() => {}).then(() => saveGameAccount(session.user, snapshot));
+  saveQueue.then(() => { if (--saving === 0) $('#syncStatus').textContent = 'DEMO SYNCED'; }, () => { saving--; $('#syncStatus').textContent = 'SAVE FAILED · RETRY'; notify('Demo account could not be saved. Tap the sync status to retry.'); });
+}
+function startGame() {
+  $('#gameLoading').hidden = false; $('#retryGame').hidden = true; $('#gameLoadingText').textContent = 'PREPARING YOUR FLIGHT…'; $('#gameLoadingDetail').textContent = 'Connecting your demo account.';
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Connection timed out')), 12000); });
+  Promise.race([loadGameAccount(), timeout]).finally(() => clearTimeout(timer)).then(account => {
+    session = account;
+    if (account.user) { state.balance = account.balance; state.bets = account.bets.slice(0, 30); $('#syncStatus').textContent = 'DEMO SYNCED'; }
+    else $('#syncStatus').textContent = 'GUEST · LOCAL DEMO';
+    $('#gameLoading').hidden = true; $('#reset').disabled = false;
+    state.phaseStart = performance.now(); render();
+    if (!gameStarted) { gameStarted = true; requestAnimationFrame(tick); }
+    watchGameAccount(account.user, () => location.reload());
+  }).catch(() => { $('#gameLoadingText').textContent = 'COULD NOT CONNECT'; $('#gameLoadingDetail').textContent = 'Check your internet connection and Firebase setup, then try again.'; $('#retryGame').hidden = false; });
+}
+
 let toastTimer;
 function notify(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 3000); }
 function stakeFor(i) { return Number($(`#stake-${i}`).value); }
@@ -147,7 +171,7 @@ function tick(now) {
 let lastList = '';
 function render() {
   $('#balance').textContent = `₦${money(state.balance)}`;
-  const scene = $('#scene'); scene.classList.toggle('crashed', state.phase === 'crashed'); scene.classList.toggle('waiting', state.phase === 'waiting');
+  const scene = $('#scene'); scene.classList.toggle('crashed', state.phase === 'crashed'); scene.classList.toggle('waiting', state.phase === 'waiting'); scene.classList.toggle('flying', state.phase === 'flying');
   $('#phaseLabel').textContent = state.phase === 'waiting' ? 'GET READY FOR TAKEOFF' : state.phase === 'crashed' ? 'FLEW AWAY!' : 'THE HERO IS FLYING';
   $('#multiplier').innerHTML = `${state.multiplier.toFixed(2)}<span>×</span>`;
   $('#phaseMessage').textContent = state.phase === 'waiting' ? 'Place your bets for the next round' : state.phase === 'crashed' ? 'Better luck on the next flight' : 'Cash out before the hero flies away';
@@ -178,9 +202,10 @@ function render() {
     if (next) parts.push(`Next flight: ${next.side.toUpperCase()} ${next.coefficient.toFixed(2)}× · ₦${money(next.stake)} · pays ${next.odds.toFixed(2)}×`);
     $(`[data-ou-status="${i}"]`).textContent = parts.join(' | ') || 'Predict where the next flight ends.';
   });
-  const listKey = JSON.stringify(state.bets); if (listKey !== lastList) { lastList = listKey; $('#betList').innerHTML = state.bets.length ? state.bets.map(b => `<div class="bet-row"><span><i class="player-avatar">Y</i><span><strong>${b.mode || 'Classic'}</strong><small>₦${money(b.stake)}</small></span></span><b class="${b.status === 'won' ? 'win' : ''}">${b.multiplier.toFixed(2)}×</b><strong class="${b.status === 'won' ? 'win' : 'loss'}">${b.status === 'won' ? '+' : ''}₦${money(b.payout)}</strong></div>`).join('') : '<div class="empty-state"><div class="empty-orbit">✦</div><strong>No flights just yet</strong><p>Place a bet and your activity<br>will show up here.</p></div>'; }
+  const listKey = JSON.stringify(state.bets); if (listKey !== lastList) { lastList = listKey; $('#betList').innerHTML = state.bets.length ? state.bets.map(b => `<div class="bet-row"><span><i class="player-avatar">Y</i><span><strong>${escape(b.mode || 'Classic')}</strong><small>₦${money(b.stake)}</small></span></span><b class="${b.status === 'won' ? 'win' : ''}">${b.multiplier.toFixed(2)}×</b><strong class="${b.status === 'won' ? 'win' : 'loss'}">${b.status === 'won' ? '+' : ''}₦${money(b.payout)}</strong></div>`).join('') : '<div class="empty-state"><div class="empty-orbit">✦</div><strong>No flights just yet</strong><p>Place a bet and your activity<br>will show up here.</p></div>'; }
 }
 app.addEventListener('click', e => {
+  if (!gameStarted && !e.target.closest('#retryGame')) return;
   const mode = e.target.closest('[data-mode]'); if (mode) { state.mode = mode.dataset.mode; document.querySelectorAll('[data-mode]').forEach(el => { const active = el === mode; el.classList.toggle('active', active); el.setAttribute('aria-selected', String(active)); }); $('#classicPanel').hidden = state.mode !== 'classic'; $('#ouPanel').hidden = state.mode !== 'ou'; return; }
   const slot = e.target.closest('[data-ou-slot]'); if (slot) { state.ouSlot = Number(slot.dataset.ouSlot); document.querySelectorAll('[data-ou-slot]').forEach(el => { const active = el === slot; el.classList.toggle('active', active); el.setAttribute('aria-selected', String(active)); }); render(); return; }
   const ouBet = e.target.closest('[data-ou-bet]'); if (ouBet) { placeOu(Number(ouBet.dataset.slot), ouBet.dataset.ouBet); return; }
@@ -197,4 +222,6 @@ app.addEventListener('change', e => { if (e.target.matches('[data-auto-bet]')) s
 app.addEventListener('input', e => { if (e.target.matches('.stake-input, [data-ou-stake], [data-ou-coeff]')) render(); });
 $('#reset').addEventListener('click', () => { if ([...state.tickets, ...state.nextTickets, ...state.ouTickets, ...state.nextOuTickets].some(b => b?.status === 'queued' || b?.status === 'active')) return notify('Finish or cancel your active bets before resetting.'); state.balance = 10000; persist(); render(); notify('Demo balance reset to ₦10,000.00.'); });
 $('#howBtn').addEventListener('click', () => $('#rules').showModal()); $('#guideBtn').addEventListener('click', () => $('#rules').showModal()); $('#closeRules').addEventListener('click', () => $('#rules').close()); $('#gotIt').addEventListener('click', () => $('#rules').close());
-render(); requestAnimationFrame(tick);
+$('#retryGame').addEventListener('click', startGame);
+$('#syncStatus').addEventListener('click', () => { if (session?.user && latestSnapshot && saving === 0) persist(); });
+render(); startGame();

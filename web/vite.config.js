@@ -21,6 +21,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(root, "index.html"),
+        game: resolve(root, "game.html"),
+        login: resolve(root, "login.html"),
+        signup: resolve(root, "signup.html"),
         dashboard: resolve(root, "dashboard.html"),
         markets: resolve(root, "markets.html"),
         notfound: resolve(root, "404.html"),

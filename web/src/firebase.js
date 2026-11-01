@@ -7,13 +7,13 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyB2bI1Pc3ST8NK-wP7N7j13iSJPfIWTHPU",
-  authDomain: "herobet.firebaseapp.com",
-  projectId: "herobet",
-  storageBucket: "herobet.firebasestorage.app",
-  messagingSenderId: "349251259906",
-  appId: "1:349251259906:web:2a05814969463900abe11b",
-  measurementId: "G-NQW7NXFVBN",
+  apiKey: "AIzaSyBbMT9mMiEc3SH9xr3Qz1hdYxAD7pU5cCc",
+  authDomain: "herobet-51d74.firebaseapp.com",
+  projectId: "herobet-51d74",
+  storageBucket: "herobet-51d74.firebasestorage.app",
+  messagingSenderId: "795474586653",
+  appId: "1:795474586653:web:e0704793c8f4dc090d2af4",
+  measurementId: "G-4TPZZS823E",
 };
 
 export const app = initializeApp(firebaseConfig);
