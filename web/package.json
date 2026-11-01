@@ -3,20 +3,22 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "HeroBet Super Hero \u2014 a play-money crash game prototype.",
+  "description": "HeroBet Super Hero — a play-money crash game prototype.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test:engine": "node scripts/test-engine.mjs",
-    "test": "npm run test:engine && npm run test:pages",
-    "test:pages": "node scripts/test-pages.mjs"
+    "test": "npm run test:engine && npm run test:pages && npm run test:game",
+    "test:pages": "node scripts/test-pages.mjs",
+    "test:game": "node scripts/test-game.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",
     "lightweight-charts": "^5.2.1"
   },
   "devDependencies": {
+    "jsdom": "^30.1.3",
     "vite": "^7.1.0"
   }
 }
