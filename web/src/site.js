@@ -44,15 +44,16 @@ const footer = `<footer class="site-footer"><div>${brand}<p>A little courage goe
 
 const home = `${header}<main><section class="home-hero"><div class="hero-copy"><div class="kicker"><span></span> YOUR NEXT ADVENTURE AWAITS</div><h1>THE SKY IS<br>NOT THE <em>LIMIT<span>.</span></em></h1><p>Big flights. Bigger moments. Step into Super Hero and see how far you can go.</p><div class="hero-actions"><a class="primary-link" href="./game.html">PLAY SUPER HERO <span>↗</span></a><a class="secondary-link" href="./signup.html">CREATE AN ACCOUNT</a></div><div class="hero-meta"><span>✦ &nbsp; ONE GAME. ENDLESS FLIGHTS.</span><span>18+ &nbsp; PLAY RESPONSIBLY</span></div></div><div class="hero-visual"><div class="hero-orbit"></div><img src="./flying-hero.png" alt="A superhero flying through space" /><div class="hero-visual-label"><span>FEATURED GAME / 01</span><strong>SUPER <em>HERO</em></strong><small>YOUR NEXT FLIGHT IS CALLING</small></div></div></section><div class="ticker"><span>✦ &nbsp; AIM HIGHER</span><span>✦ &nbsp; YOUR MOMENT TO FLY</span><span>✦ &nbsp; PLAY YOUR WAY</span><span>✦ &nbsp; AIM HIGHER</span></div><section class="home-section"><div class="section-top"><div><div class="kicker"><span></span> YOUR GAME, YOUR RULES</div><h2>ONE HERO. <em>ENDLESS</em> POSSIBILITIES<span>.</span></h2></div><p>Choose your mode and make every flight count.</p></div><div class="feature-grid"><a class="feature-card featured" href="./game.html"><div><span class="feature-number">01 / FEATURED GAME</span><h3>SUPER<br><em>HERO</em></h3><p>Take off, watch the multiplier climb and make your move.</p><span class="feature-cta">TAKE FLIGHT &nbsp; ↗</span></div><img src="./flying-hero.png" alt="" /></a><div class="feature-side"><div class="mini-feature"><span class="mini-icon">↗</span><div><h3>CLASSIC</h3><p>Cash out before the hero flies away.</p></div></div><div class="mini-feature"><span class="mini-icon gold">◈</span><div><h3>OVER / UNDER</h3><p>Predict where the next flight will end.</p></div></div><div class="demo-callout"><strong>JUST HERE FOR THE THRILL?</strong><p>Start with play money. No deposit needed.</p><a href="./game.html">Try the demo ↗</a></div></div></div></section><section class="steps-section"><div class="kicker"><span></span> IT'S EASY TO GET STARTED</div><h2>READY FOR <em>TAKEOFF?</em></h2><div class="steps"><div><b>01</b><h3>CREATE YOUR ACCOUNT</h3><p>Sign up and make HeroBet your own.</p></div><div><b>02</b><h3>CHOOSE YOUR MODE</h3><p>Play Classic or predict with Over / Under.</p></div><div><b>03</b><h3>ENJOY THE FLIGHT</h3><p>Place your demo bet and watch the hero soar.</p></div></div></section></main>${footer}`;
 function authPage(signup) { return `${header}<main class="auth-layout"><div class="auth-art"><div class="auth-art-copy"><span class="kicker"><span></span> THE GAME IS ON</span><h1>YOUR NEXT<br><em>GREAT FLIGHT</em><br>STARTS HERE<span>.</span></h1><p>Join the adventure. Your moment is waiting.</p></div><img src="./flying-hero.png" alt="" /><span class="art-bottom">HEROBET &nbsp; / &nbsp; SUPER HERO</span></div><section class="auth-content"><div class="auth-box"><div class="kicker"><span></span> ${signup ? 'JOIN THE ADVENTURE' : 'WELCOME BACK'}</div><h1>${signup ? 'CREATE YOUR ACCOUNT' : 'READY TO FLY AGAIN'}<span>.</span></h1><p>${signup ? 'Your next adventure is just a few details away.' : 'Log in to pick up where you left off.'}</p><form id="authForm">${signup ? '<label>Display name<input name="name" autocomplete="name" placeholder="What should we call you?" maxlength="40" required></label>' : ''}<label>Email address<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label><label>Password<input name="password" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="6" placeholder="${signup ? 'At least 6 characters' : 'Enter your password'}" required></label>${signup ? '<label class="check-label"><input type="checkbox" name="adult" required> <span>I am 18 or older and understand this is a play-money demo.</span></label>' : '<button class="text-button forgot" type="button" id="forgot">Forgot password?</button>'}<div class="form-error" id="formError" role="alert"></div><button class="primary-link form-submit" type="submit">${signup ? 'CREATE ACCOUNT' : 'LOG IN'} <span>↗</span></button></form><div class="auth-switch">${signup ? 'Already have an account? <a href="./login.html">Log in</a>' : 'New to HeroBet? <a href="./signup.html">Create an account</a>'}</div><a class="guest-link" href="./game.html">Continue to the demo without an account ↗</a></div></section></main>`; }
-const accountBottomNav = `<nav class="account-bottom-nav" aria-label="Account navigation">
-  <a href="./">${accountIcon('home')}<span>Home</span></a>
+const accountBottomNav = (active = 'dashboard') => `<nav class="account-bottom-nav" aria-label="Account navigation">
+  <a class="${active === 'home' ? 'active' : ''}" href="./app-home.html" ${active === 'home' ? 'aria-current="page"' : ''}>${accountIcon('home')}<span>Home</span>${active === 'home' ? '<i></i>' : ''}</a>
   <button type="button" data-account-action="az-menu">${accountIcon('menu')}<span>AZ Menu</span></button>
   <a href="./game.html">${accountIcon('gamepad')}<span>Games</span></a>
   <button type="button" data-account-action="bet-history">${accountIcon('bets')}<span>My Bets</span></button>
-  <a class="active" href="./dashboard.html" aria-current="page">${accountIcon('user')}<span>Account</span><i></i></a>
+  <a class="${active === 'dashboard' ? 'active' : ''}" href="./dashboard.html" ${active === 'dashboard' ? 'aria-current="page"' : ''}>${accountIcon('user')}<span>Account</span>${active === 'dashboard' ? '<i></i>' : ''}</a>
 </nav>`;
-const dashboard = `<main class="account-page"><div id="dashboardContent"><div class="account-loading" role="status"><span class="account-loading-mark">H</span><strong>Loading your account…</strong></div></div></main>${accountBottomNav}<dialog id="accountDialog" class="account-dialog" aria-labelledby="accountDialogTitle"><div id="accountDialogContent"></div></dialog><div id="accountToast" class="account-toast" role="status" aria-live="polite"></div>`;
-app.innerHTML = page === 'home' ? home : page === 'dashboard' ? dashboard : authPage(page === 'signup');
+const dashboard = `<main class="account-page"><div id="dashboardContent"><div class="account-loading" role="status"><span class="account-loading-mark">H</span><strong>Loading your account…</strong></div></div></main>${accountBottomNav('dashboard')}<dialog id="accountDialog" class="account-dialog" aria-labelledby="accountDialogTitle"><div id="accountDialogContent"></div></dialog><div id="accountToast" class="account-toast" role="status" aria-live="polite"></div>`;
+const appHome = `<main class="app-home-page"><header class="app-home-header"><a class="app-home-brand" href="./app-home.html"><span class="site-mark">H<span>✦</span></span><span>HERO<span>BET</span><small>PLAYER LOBBY</small></span></a><a class="app-home-account" href="./dashboard.html">My account ↗</a></header><section class="app-home-welcome"><span class="app-home-kicker"><i></i> YOUR PLAYER LOBBY</span><h1>Welcome back<span id="lobbyName">, Hero</span><span class="app-home-dot">.</span></h1><p>Your place for the game, your bets, rewards, and referrals.</p></section><section class="app-home-feature"><div class="app-home-feature-copy"><span>FEATURED GAME · 01</span><h2>SUPER<br><em>HERO</em></h2><p>Enter the flight and follow the current practice round.</p><a href="./game.html">OPEN SUPER HERO <b>↗</b></a></div><img src="./flying-hero.png" alt="Super Hero flying" /></section><section class="app-home-status"><div class="app-home-status-icon">✦</div><div><span>GAME STATUS</span><strong>Practice mode · rounds are not yet shared</strong><p>Every browser currently runs its own play-money simulation. A server engine is required before everyone can see the same always-on flight.</p></div></section><section class="app-home-shortcuts"><a href="./dashboard.html"><span>◉</span><strong>Account & wallet</strong><small>View your account summary</small><b>↗</b></a><div><span>♧</span><strong>Loyalty rewards</strong><small>0.01% target rate · pending secure settlement</small><b>LOCKED</b></div><div><span>⌁</span><strong>Refer a player</strong><small>Upline reward target: 0.01% of eligible downline bets</small><b>SOON</b></div></section><p class="app-home-disclaimer">Real-money betting and cash rewards are not enabled. Do not deposit for gameplay. Rewards and referral commissions must be settled by a trusted server ledger.</p></main>${accountBottomNav('home')}`;
+app.innerHTML = page === 'home' ? home : page === 'dashboard' ? dashboard : page === 'app-home' ? appHome : authPage(page === 'signup');
 const actions = document.querySelector('#navActions');
 let dashUnsubscribe, dashboardUser = null, dashboardData = null, dashboardWallet = null, dashboardRequest = 0;
 let balanceVisible = true, accountToastTimer;
@@ -101,13 +102,14 @@ function accountIdentity(user) {
 
 function accountLoyalty(data) {
   const bets = data?.bets || [];
-  const points = Math.min(NEXT_TIER_POINTS, Math.floor(bets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0)));
+  const eligibleStake = bets.reduce((sum, bet) => sum + Number(bet.stake || 0), 0);
+  const points = Math.min(NEXT_TIER_POINTS, Math.floor(eligibleStake));
   return {
     points,
     remaining: Math.max(0, NEXT_TIER_POINTS - points),
     progress: Math.min(100, points / NEXT_TIER_POINTS * 100),
     // A display-only demo reward; it has no cash value and is not withdrawable.
-    reward: Math.floor(points * 0.0012 / 10) * 10,
+    reward: Math.floor(eligibleStake * 0.0001 * 100) / 100,
   };
 }
 
@@ -240,7 +242,7 @@ function showMissions() {
 function showLoyalty() {
   if (!dashboardUser) return accountLoginPrompt('Loyalty Rewards', 'Log in to track demo tier points from your settled Super Hero bets.');
   const loyalty = accountLoyalty(dashboardData);
-  openAccountDialog('Loyalty Rewards', `<div class="account-loyalty-summary"><span>GOLDEN BOOT</span><strong>${accountNumber.format(loyalty.points)}</strong><small>DEMO TIER POINTS</small><div><i style="width:${loyalty.progress}%"></i></div><p>${accountNumber.format(loyalty.remaining)} points to Galactico</p></div><div class="account-demo-callout">${accountIcon('info')}<p>Demo points are calculated from the stakes in your 30 most recent settled bets. Potential rewards are illustrative play-money values only; they cannot be withdrawn or redeemed.</p></div>`, 'YOUR TIER');
+  openAccountDialog('Loyalty Rewards', `<div class="account-loyalty-summary"><span>GOLDEN BOOT</span><strong>${accountNumber.format(loyalty.points)}</strong><small>DEMO TIER POINTS</small><div><i style="width:${loyalty.progress}%"></i></div><p>${accountNumber.format(loyalty.remaining)} points to Galactico</p></div><div class="account-demo-callout">${accountIcon('info')}<p>The target rate is 0.01% of eligible settled stake. This estimate uses up to 30 recent demo bets only; no real rewards accrue or can be withdrawn until secure server settlement is enabled.</p></div>`, 'YOUR TIER');
 }
 
 function wishlistHasHero() {
@@ -430,7 +432,7 @@ if (page === 'dashboard') {
 // normally calls back asynchronously, but this also supports synchronous test
 // adapters without a temporal-dead-zone race.
 onAuthStateChanged(auth, user => {
-  if (page === 'dashboard' && isAdminUser(user)) {
+  if ((page === 'dashboard' || page === 'app-home') && isAdminUser(user)) {
     location.replace('./admin.html');
     return;
   }
@@ -441,4 +443,8 @@ onAuthStateChanged(auth, user => {
     } else actions.innerHTML = '<a href="./login.html" class="nav-login">Log in</a><a href="./signup.html" class="nav-signup">Create account <span>↗</span></a>';
   }
   if (page === 'dashboard') showDashboard(user);
+  if (page === 'app-home') {
+    const name = document.querySelector('#lobbyName');
+    if (user && name) name.textContent = `, ${esc(accountIdentity(user))}`;
+  }
 });

@@ -11,6 +11,9 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: true,
+    proxy: {
+      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
+    },
   },
   preview: {
     host: "0.0.0.0",
@@ -25,6 +28,7 @@ export default defineConfig({
         login: resolve(root, "login.html"),
         signup: resolve(root, "signup.html"),
         dashboard: resolve(root, "dashboard.html"),
+        appHome: resolve(root, "app-home.html"),
         admin: resolve(root, "admin.html"),
         markets: resolve(root, "markets.html"),
         notfound: resolve(root, "404.html"),
