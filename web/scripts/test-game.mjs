@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { JSDOM } from 'jsdom';
 
-async function game(account = { user: null }) {
+async function game(account = { user: null }, api = null) {
   const dom = new JSDOM('<div id="app"></div>', { url: 'https://example.com', runScripts: 'outside-only' });
   const w = dom.window;
   let now = 0, frame;
@@ -14,6 +14,8 @@ async function game(account = { user: null }) {
   w.loadGameAccount = () => Promise.resolve(account);
   w.saveGameAccount = (user, data) => { saves.push({ user, data }); return Promise.resolve(); };
   w.watchGameAccount = () => () => {};
+  w.fetchSharedGameState = api ? () => Promise.resolve(api.snapshot) : () => Promise.reject(new Error('API offline'));
+  w.fetchSharedRoundHistory = api ? async () => api.history || [] : async () => { throw new Error('API offline'); };
   w.eval(fs.readFileSync(new URL('../src/game.js', import.meta.url), 'utf8').replace(/^import [^;]+;$/gm, ''));
   await new Promise(resolve => setTimeout(resolve, 0));
   const q = s => w.document.querySelector(s);
@@ -135,4 +137,23 @@ async function game(account = { user: null }) {
   g.close();
 }
 
-console.log('Game tests passed: next-round queuing, cancellation, settlement, O/U and validation.');
+{
+  const now = Date.now();
+  const api = {
+    snapshot: { serverTime: now, round: { id: 'shared-841', phase: 'flying', startsAt: now - 12000, bettingClosesAt: now - 5000, multiplier: 1.47, commitment: 'a'.repeat(64) } },
+    history: [{ crashMultiplier: 2.4 }, { crashMultiplier: 1.1 }],
+  };
+  const g = await game({ user: null }, api);
+  assert.match(g.q('#roundIndicator').textContent, /GLOBAL ROUND #shared-841/);
+  assert.equal(g.q('#scene').classList.contains('flying'), true, 'scene follows the shared server round');
+  assert.equal(g.q('#multiplier').textContent, '1.47×', 'display uses the API multiplier');
+  assert.equal(g.q('[data-bet="0"]').disabled, true, 'betting remains disabled until server bet endpoints exist');
+  assert.equal(g.q('#reset').disabled, true, 'local demo balance cannot be reset against the shared viewer');
+  assert.match(g.q('#activityFoot').textContent, /BET API NOT ENABLED/);
+  assert.match(g.q('#phaseMessage').textContent, /server betting is not enabled yet/);
+  assert.match(g.q('#gameSummary').textContent, /Everyone sees this same/);
+  assert.match(g.q('#history').textContent, /2.40×/);
+  g.close();
+}
+
+console.log('Game tests passed: local practice, shared round display, locked shared bet controls, next-round queuing, settlement and O/U.');
