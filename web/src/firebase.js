@@ -7,7 +7,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyBbMT9mMiEc3SH9xr3Qz1hdYxAD7pU5cCc",
+  apiKey: "AIzaSyBbMT9mMiEc2Sh9xr3Qz1hdYxAD7pU5cCc",
   authDomain: "herobet-51d74.firebaseapp.com",
   projectId: "herobet-51d74",
   storageBucket: "herobet-51d74.firebasestorage.app",

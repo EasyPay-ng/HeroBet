@@ -9,8 +9,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:engine": "node scripts/test-engine.mjs",
-    "test": "npm run test:engine && npm run test:pages && npm run test:game && npm run test:site && npm run test:player",
+    "test": "npm run test:engine && npm run test:pages && npm run test:game && npm run test:site && npm run test:player && npm run test:payments && npm run test:admin",
     "test:pages": "node scripts/test-pages.mjs",
+    "test:payments": "node scripts/test-payments.mjs",
+    "test:admin": "node scripts/test-admin.mjs",
     "test:game": "node scripts/test-game.mjs",
     "test:site": "node scripts/test-site.mjs",
     "test:player": "node scripts/test-player.mjs"

@@ -35,6 +35,20 @@ export async function saveGameAccount(user, data) {
   await setDoc(playerRef(user.uid), { balance: data.balance, bets: data.bets.slice(0, 30), updatedAt: Date.now() });
 }
 
+// The wallet is deliberately separate from the play-money game account. The
+// browser may create a zero-balance wallet, but only the designated admin can
+// subsequently change it while reviewing manual transfers (see firestore.rules).
+export const walletRef = uid => doc(db, 'wallets', uid);
+export async function ensureWallet(user) {
+  if (!user || auth.currentUser?.uid !== user.uid) throw new Error('Your session changed. Reload and sign in again.');
+  const ref = walletRef(user.uid);
+  await runTransaction(db, async tx => {
+    const snapshot = await tx.get(ref);
+    if (!snapshot.exists()) tx.set(ref, { balance: 0, currency: 'NGN', updatedAt: Date.now() });
+  });
+  return ref;
+}
+
 // A session change in another tab must never continue using the previous account.
 export function watchGameAccount(initialUser, onChange) {
   const initialUid = initialUser?.uid || null;
