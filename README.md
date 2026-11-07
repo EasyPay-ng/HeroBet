@@ -1,10 +1,10 @@
 # HeroBet — Super Hero
 
-HeroBet is a play-money Super Hero crash-game prototype, with a homepage,
-email/password signup and login, account dashboard, NGN wallet, and manual
-bank-transfer administration. Classic lets players cash out before the flight
-ends; O/U lets them predict whether the flight ends at or above a coefficient.
-Both support two slips and next-round bets.
+HeroBet is a play-money Super Hero crash-game prototype, with a public homepage,
+separate player lobby, email/password signup and login, account dashboard, NGN
+wallet, and manual bank-transfer administration. Classic lets players cash out
+before the flight ends; O/U lets them predict whether the flight ends at or
+above a coefficient. Both support two slips and next-round bets.
 
 Signed-in **game** balances and the last 30 settled bets are stored in
 `demoPlayers/{uid}`. The dashboard's **Total Balance** is separate: it comes
@@ -33,7 +33,14 @@ sessions can overwrite each other. **Super Hero remains play money.** Manual
 bank transfers require real-world verification by the admin; the app cannot
 confirm that money arrived. A production gambling product also needs a
 server-authoritative round engine and ledger, fairness audits, licensing, age
-verification and other protections.
+verification and other protections. The bottom-nav Home opens a dedicated
+player lobby (not the public index); it explicitly identifies the current game
+as local practice. Global always-on rounds, real-money wagers, 0.01% loyalty
+accrual, and 0.01% one-level referral commissions are not enabled. See
+[global game and rewards launch gates](docs/GLOBAL-GAME-AND-REWARDS.md) for the
+server-side requirements and exact reward basis. The standalone Node/PostgreSQL
+shared-round API foundation is in `api/`; see [API step 1](docs/GAME-API-STEP-1.md).
+This first API step is read-only and does not yet place or settle bets.
 
 ## Setup and run
 

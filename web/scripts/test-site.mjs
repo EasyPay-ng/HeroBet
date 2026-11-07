@@ -37,6 +37,16 @@ function site(page, user = null) {
   assert.equal(x.q('.nav-signup').getAttribute('href'), './signup.html'); x.close();
 }
 {
+  const user = { uid: 'player-home', displayName: 'Sky Captain', email: 'sky@example.com' };
+  const x = site('app-home', user);
+  assert.match(x.q('.app-home-welcome').textContent, /Welcome back, Sky Captain/);
+  assert.equal(x.q('.account-bottom-nav a').getAttribute('href'), './app-home.html', 'bottom Home opens the player lobby, not the public index');
+  assert.match(x.q('.app-home-status').textContent, /rounds are not yet shared/);
+  assert.match(x.q('.app-home-disclaimer').textContent, /Real-money betting and cash rewards are not enabled/);
+  assert.match(x.q('.account-bottom-nav a').className, /active/);
+  x.close();
+}
+{
   const x = site('home', { uid: 'admin', email: 'beniwealth70@gmail.com' });
   assert.equal(x.q('.nav-login').getAttribute('href'), './admin.html', 'admin account links to the admin dashboard'); x.close();
 }
@@ -53,6 +63,10 @@ function site(page, user = null) {
   x.q('[data-account-action="bet-history"]').click();
   assert.match(x.q('.account-history-row').textContent, /Classic/);
   assert.match(x.q('.account-history-row').textContent, /NGN 200.00/);
+  x.q('[data-account-action="close-dialog"]').click();
+  x.q('[data-account-action="loyalty"]').click();
+  assert.match(x.q('#accountDialog').textContent, /0\.01% of eligible settled stake/);
+  assert.match(x.q('#accountDialog').textContent, /up to 30 recent demo bets only/);
   x.q('[data-account-action="close-dialog"]').click();
   x.q('[data-account-action="deposit"]').click();
   await new Promise(resolve => setTimeout(resolve, 0));
