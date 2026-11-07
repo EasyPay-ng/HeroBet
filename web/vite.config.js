@@ -25,6 +25,7 @@ export default defineConfig({
         login: resolve(root, "login.html"),
         signup: resolve(root, "signup.html"),
         dashboard: resolve(root, "dashboard.html"),
+        admin: resolve(root, "admin.html"),
         markets: resolve(root, "markets.html"),
         notfound: resolve(root, "404.html"),
       },
