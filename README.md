@@ -39,8 +39,8 @@ as local practice. Global always-on rounds, real-money wagers, 0.01% loyalty
 accrual, and 0.01% one-level referral commissions are not enabled. See
 [global game and rewards launch gates](docs/GLOBAL-GAME-AND-REWARDS.md) for the
 server-side requirements and exact reward basis. The standalone Node/PostgreSQL
-shared-round API foundation is in `api/`; see [API step 1](docs/GAME-API-STEP-1.md).
-This first API step is read-only and does not yet place or settle bets.
+shared-round API foundation is in `api/`; see [API step 1](docs/GAME-API-STEP-1.md)
+and [game-screen integration](docs/GAME-API-STEP-2.md). The API remains read-only and does not yet place or settle bets.
 
 ## Setup and run
 

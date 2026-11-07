@@ -1,6 +1,8 @@
 import './game.css';
-// Initialise the configured Firebase project; game state remains local demo data.
+// Wallets and demo slips remain in the existing account store. Shared round
+// display uses a separate read-only Node/PostgreSQL API.
 import { loadGameAccount, saveGameAccount, watchGameAccount } from './player.js';
+import { fetchSharedGameState, fetchSharedRoundHistory } from './game-api.js';
 
 const app = document.querySelector('#app');
 const money = n => Math.max(0, n).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -8,6 +10,7 @@ const savedBalance = Number(localStorage.getItem('herobet-demo-balance'));
 const state = {
   balance: Number.isFinite(savedBalance) && savedBalance >= 0 && localStorage.getItem('herobet-demo-balance') !== null ? savedBalance : 10000,
   phase: 'waiting', multiplier: 1, crash: 1, phaseStart: performance.now(),
+  sharedMode: false, apiConnected: false, sharedRound: null, sharedRoundId: null, sharedOffset: 0,
   history: [], bets: [], tab: 'all', mode: 'classic', ouSlot: 0, tickets: [null, null], nextTickets: [null, null], ouTickets: [null, null], nextOuTickets: [null, null], autoBet: [false, false], autoCash: [false, false]
 };
 
@@ -50,10 +53,10 @@ app.innerHTML = `
     <div class="header-right"><a class="game-nav-link" href="./">Home</a><a class="game-nav-link" href="./dashboard.html">Dashboard</a><div class="balance"><span>DEMO BALANCE</span><strong id="balance">₦0.00</strong><button type="button" id="syncStatus" class="sync-status" title="Retry a failed save">CONNECTING…</button></div><button class="reset-btn" id="reset" disabled>Reset balance</button></div>
   </div></header>
   <div id="gameLoading" class="game-loading" role="status"><div><span class="game-loading-icon">✦</span><strong id="gameLoadingText">PREPARING YOUR FLIGHT…</strong><p id="gameLoadingDetail">Connecting your demo account.</p><button id="retryGame" hidden>Retry connection</button><a href="./">Back to home</a></div></div><main class="layout">
-    <div class="page-heading"><div><div class="eyebrow"><span></span> THE ULTIMATE CRASH GAME</div><h1>SUPER <em>HERO</em><span class="heading-star">✦</span></h1><p>Ready for takeoff? Place your bet and cash out before the hero flies away.</p></div><div class="demo-pill"><span></span> FREE PLAY MODE</div></div>
+    <div class="page-heading"><div><div class="eyebrow"><span></span> THE ULTIMATE CRASH GAME</div><h1>SUPER <em>HERO</em><span class="heading-star">✦</span></h1><p id="gameSummary">Ready for takeoff? Place your bet and cash out before the hero flies away.</p></div><div class="demo-pill"><span></span> FREE PLAY MODE</div></div>
     <div class="content-grid"><div class="main-column">
       <section class="game-shell" aria-label="Super Hero game">
-        <div class="game-toolbar"><div class="game-title"><span class="game-icon">✦</span><div><strong>SUPER HERO</strong><small>THE SKY IS NOT THE LIMIT</small></div></div><div class="toolbar-right"><span class="round-indicator"><i></i> LIVE SIMULATION</span><span class="sound-mark" title="Sound is off">♪ <small>OFF</small></span></div></div>
+        <div class="game-toolbar"><div class="game-title"><span class="game-icon">✦</span><div><strong>SUPER HERO</strong><small>THE SKY IS NOT THE LIMIT</small></div></div><div class="toolbar-right"><span class="round-indicator" id="roundIndicator"><i></i> CONNECTING TO ROUNDS</span><span class="sound-mark" title="Sound is off">♪ <small>OFF</small></span></div></div>
         <div class="history-bar"><span class="history-label">PREVIOUS FLIGHTS <span>↗</span></span><div id="history" class="history-list"><span class="history-empty">Your round history will appear here</span></div></div>
         <div class="flight-scene" id="scene"><div class="scene-grid"></div><div class="scene-overlay"></div><div class="flight-art" aria-hidden="true"></div><div class="scene-top"><span><i></i> HERO FLIGHT</span><span>ROUND IN PROGRESS</span></div><div class="flight-center"><div id="phaseLabel" class="phase-label">GET READY FOR TAKEOFF</div><div id="multiplier" class="multiplier">1.00<span>×</span></div><div id="phaseMessage" class="phase-message">Place your bets for the next round</div><div class="progress-track" id="progressTrack"><div id="progress"></div></div></div><div class="scene-bottom"><span>✦ &nbsp; THE SKY IS YOURS</span><span>HERO<span class="gold">BET</span> / 01</span></div></div>
         <div class="game-foot"><div><span class="foot-icon">✧</span><span><strong>HOW TO PLAY</strong><small>Bet. Watch it fly. Cash out in time.</small></span></div><button id="howBtn">Game rules <span>↗</span></button></div>
@@ -63,7 +66,7 @@ app.innerHTML = `
       <div class="tickets" id="classicPanel">${ticketMarkup(0)}${ticketMarkup(1)}</div>
       <section class="ou-panel" id="ouPanel" hidden><div class="ou-heading"><div><span class="section-index">PREDICT THE FLIGHT</span><h3>Over or under<span>.</span></h3><p>Pick a coefficient and predict where the next flight will end.</p></div><span class="ticket-note">PLAY MONEY</span></div><div class="ou-slot-tabs" role="tablist" aria-label="Over Under bet slip"><button data-ou-slot="0" role="tab" aria-selected="true" class="active">Bet 1</button><button data-ou-slot="1" role="tab" aria-selected="false">Bet 2</button></div>${ouMarkup(0)}${ouMarkup(1)}</section>
     </div>
-    <aside class="side-column"><section class="activity-panel"><div class="panel-heading"><div><span class="section-index">THE FLIGHT LOG</span><h2>Bet activity<span>.</span></h2></div><span class="activity-icon">↗</span></div><p class="panel-description">Keep track of your recent flights.</p><div class="activity-tabs" role="tablist"><button data-tab="all" class="active" role="tab" aria-selected="true">All bets</button><button data-tab="mine" role="tab" aria-selected="false">My bets</button></div><div class="table-head"><span>BET</span><span>FLIGHT</span><span>PAYOUT</span></div><div id="betList" class="bet-list"></div><div class="activity-foot"><span class="live-dot"></span> YOUR LOCAL GAME ACTIVITY</div></section>
+    <aside class="side-column"><section class="activity-panel"><div class="panel-heading"><div><span class="section-index">THE FLIGHT LOG</span><h2>Bet activity<span>.</span></h2></div><span class="activity-icon">↗</span></div><p class="panel-description">Keep track of your recent flights.</p><div class="activity-tabs" role="tablist"><button data-tab="all" class="active" role="tab" aria-selected="true">All bets</button><button data-tab="mine" role="tab" aria-selected="false">My bets</button></div><div class="table-head"><span>BET</span><span>FLIGHT</span><span>PAYOUT</span></div><div id="betList" class="bet-list"></div><div class="activity-foot" id="activityFoot"><span class="live-dot"></span> YOUR LOCAL GAME ACTIVITY</div></section>
       <section class="guide-card"><div class="guide-icon">✦</div><div><span class="section-index">FIRST TIME FLYING?</span><h3>Be your own hero.</h3><p>Place a bet, watch the multiplier climb and cash out before the hero flies away.</p><button id="guideBtn">Learn how to play <span>↗</span></button></div></section>
       <div class="responsible"><span>18+</span><p><strong>PLAY RESPONSIBLY</strong><br>This is a play-money demo. No real money can be deposited or won.</p></div>
     </aside></div>
@@ -85,15 +88,65 @@ function startGame() {
   $('#gameLoading').hidden = false; $('#retryGame').hidden = true; $('#gameLoadingText').textContent = 'PREPARING YOUR FLIGHT…'; $('#gameLoadingDetail').textContent = 'Connecting your demo account.';
   let timer;
   const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Connection timed out')), 12000); });
-  Promise.race([loadGameAccount(), timeout]).finally(() => clearTimeout(timer)).then(account => {
+  Promise.race([loadGameAccount(), timeout]).finally(() => clearTimeout(timer)).then(async account => {
     session = account;
     if (account.user) { state.balance = account.balance; state.bets = account.bets.slice(0, 30); $('#syncStatus').textContent = 'DEMO SYNCED'; }
     else $('#syncStatus').textContent = 'GUEST · LOCAL DEMO';
+    let sharedReady = false;
+    for (let attempt = 0; attempt < 3 && !sharedReady; attempt++) {
+      try { await refreshSharedState(); sharedReady = true; }
+      catch (error) {
+        if (attempt < 2 && /503/.test(String(error?.message || ''))) await new Promise(resolve => setTimeout(resolve, 350));
+        else break;
+      }
+    }
+    if (sharedReady) startSharedPolling();
+    else {
+      state.sharedMode = false;
+      state.apiConnected = false;
+      $('#roundIndicator').innerHTML = '<i></i> LOCAL PRACTICE · NOT SHARED';
+    }
     $('#gameLoading').hidden = true; $('#reset').disabled = false;
     state.phaseStart = performance.now(); render();
     if (!gameStarted) { gameStarted = true; requestAnimationFrame(tick); }
     watchGameAccount(account.user, () => location.reload());
   }).catch(() => { $('#gameLoadingText').textContent = 'COULD NOT CONNECT'; $('#gameLoadingDetail').textContent = 'Check your internet connection and Firebase setup, then try again.'; $('#retryGame').hidden = false; });
+}
+
+let sharedPollTimer;
+async function refreshSharedState() {
+  const snapshot = await fetchSharedGameState();
+  const round = snapshot.round;
+  const changedRound = state.sharedRoundId !== round.id;
+  state.sharedMode = true;
+  state.apiConnected = true;
+  state.sharedRound = round;
+  state.sharedRoundId = round.id;
+  state.sharedOffset = snapshot.serverTime - Date.now();
+  state.phase = round.phase === 'finished' ? 'crashed' : round.phase === 'scheduled' ? 'waiting' : round.phase;
+  state.multiplier = Number.isFinite(round.multiplier) ? round.multiplier : 1;
+  state.crash = Number.isFinite(round.crashMultiplier) ? round.crashMultiplier : Infinity;
+  if (changedRound) {
+    $('#roundIndicator').innerHTML = `<i></i> GLOBAL ROUND #${escape(round.id)}`;
+    try {
+      const history = await fetchSharedRoundHistory(8);
+      state.history = history.map(item => Number(item.crashMultiplier)).filter(Number.isFinite).slice(0, 8);
+    } catch { /* The current round still works if history is temporarily unavailable. */ }
+  }
+}
+function startSharedPolling() {
+  clearTimeout(sharedPollTimer);
+  const poll = async () => {
+    try {
+      await refreshSharedState();
+    } catch {
+      state.apiConnected = false;
+      $('#roundIndicator').innerHTML = '<i></i> SHARED FEED RECONNECTING';
+    }
+    render();
+    if (state.sharedMode) sharedPollTimer = setTimeout(poll, 600);
+  };
+  sharedPollTimer = setTimeout(poll, 600);
 }
 
 let toastTimer;
@@ -160,6 +213,9 @@ function endFlight(now) {
 }
 function startWaiting(now) { state.phase = 'waiting'; state.phaseStart = now; state.multiplier = 1; state.tickets = [null, null]; state.ouTickets = [null, null]; state.autoBet.forEach((enabled, i) => { if (enabled && !state.nextTickets[i]) placeBet(i, true); }); }
 function tick(now) {
+  if (state.sharedMode) {
+    render(); requestAnimationFrame(tick); return;
+  }
   if (state.phase === 'waiting' && now - state.phaseStart >= 7000) startFlight(now);
   else if (state.phase === 'flying') {
     const next = Math.floor(Math.exp((now - state.phaseStart) / 13000) * 100) / 100;
@@ -171,11 +227,29 @@ function tick(now) {
 let lastList = '';
 function render() {
   $('#balance').textContent = `₦${money(state.balance)}`;
+  $('#gameSummary').textContent = state.sharedMode
+    ? 'Everyone sees this same server-timed practice flight. Betting will unlock after the server bet API is ready.'
+    : 'Ready for takeoff? Place your bet and cash out before the hero flies away.';
+  if (state.sharedMode) {
+    $('#roundIndicator').innerHTML = state.apiConnected
+      ? `<i></i> GLOBAL ROUND #${escape(state.sharedRoundId || '')}`
+      : '<i></i> SHARED FEED RECONNECTING';
+    $('#activityFoot').innerHTML = '<span class="live-dot"></span> SHARED PRACTICE ROUND · BET API NOT ENABLED';
+  } else {
+    $('#activityFoot').innerHTML = '<span class="live-dot"></span> YOUR LOCAL GAME ACTIVITY';
+  }
   const scene = $('#scene'); scene.classList.toggle('crashed', state.phase === 'crashed'); scene.classList.toggle('waiting', state.phase === 'waiting'); scene.classList.toggle('flying', state.phase === 'flying');
   $('#phaseLabel').textContent = state.phase === 'waiting' ? 'GET READY FOR TAKEOFF' : state.phase === 'crashed' ? 'FLEW AWAY!' : 'THE HERO IS FLYING';
   $('#multiplier').innerHTML = `${state.multiplier.toFixed(2)}<span>×</span>`;
-  $('#phaseMessage').textContent = state.phase === 'waiting' ? 'Place your bets for the next round' : state.phase === 'crashed' ? 'Better luck on the next flight' : 'Cash out before the hero flies away';
-  $('#progressTrack').hidden = state.phase !== 'waiting'; $('#progress').style.width = `${Math.min(100, (performance.now() - state.phaseStart) / 70)}%`;
+  $('#phaseMessage').textContent = state.sharedMode
+    ? state.apiConnected ? 'Shared practice flight · server betting is not enabled yet' : 'Round feed interrupted. Reconnecting…'
+    : state.phase === 'waiting' ? 'Place your bets for the next round' : state.phase === 'crashed' ? 'Better luck on the next flight' : 'Cash out before the hero flies away';
+  let progress = (performance.now() - state.phaseStart) / 70;
+  if (state.sharedMode && state.sharedRound) {
+    const r = state.sharedRound;
+    progress = ((Date.now() + state.sharedOffset - r.startsAt) / Math.max(1, r.bettingClosesAt - r.startsAt)) * 100;
+  }
+  $('#progressTrack').hidden = state.phase !== 'waiting'; $('#progress').style.width = `${Math.max(0, Math.min(100, progress))}%`;
   $('.scene-top span:last-child').textContent = state.phase === 'waiting' ? 'NEXT ROUND SOON' : state.phase === 'crashed' ? 'FLIGHT ENDED' : 'ROUND IN PROGRESS';
   $('#history').innerHTML = state.history.length ? state.history.map(n => `<span class="history-chip ${n >= 10 ? 'pink' : n >= 2 ? 'purple' : 'blue'}">${n.toFixed(2)}×</span>`).join('') : '<span class="history-empty">Your round history will appear here</span>';
   state.tickets.forEach((bet, i) => {
@@ -203,9 +277,15 @@ function render() {
     $(`[data-ou-status="${i}"]`).textContent = parts.join(' | ') || 'Predict where the next flight ends.';
   });
   const listKey = JSON.stringify(state.bets); if (listKey !== lastList) { lastList = listKey; $('#betList').innerHTML = state.bets.length ? state.bets.map(b => `<div class="bet-row"><span><i class="player-avatar">Y</i><span><strong>${escape(b.mode || 'Classic')}</strong><small>₦${money(b.stake)}</small></span></span><b class="${b.status === 'won' ? 'win' : ''}">${b.multiplier.toFixed(2)}×</b><strong class="${b.status === 'won' ? 'win' : 'loss'}">${b.status === 'won' ? '+' : ''}₦${money(b.payout)}</strong></div>`).join('') : '<div class="empty-state"><div class="empty-orbit">✦</div><strong>No flights just yet</strong><p>Place a bet and your activity<br>will show up here.</p></div>'; }
+  const betControls = '[data-bet], [data-next-bet], [data-ou-bet], [data-ou-cancel], [data-adjust], [data-preset], [data-auto-bet], [data-auto-cash], [data-target], [data-ou-adjust], [data-ou-preset], [data-ou-stake], [data-ou-coeff]';
+  app.querySelectorAll(betControls).forEach(control => { control.disabled = state.sharedMode; });
+  $('#reset').disabled = state.sharedMode;
 }
 app.addEventListener('click', e => {
   if (!gameStarted && !e.target.closest('#retryGame')) return;
+  if (state.sharedMode && e.target.closest('[data-bet], [data-next-bet], [data-ou-bet], [data-ou-cancel], [data-adjust], [data-preset], [data-ou-adjust], [data-ou-preset]')) {
+    notify('Shared flight preview only: server betting is not enabled yet.'); return;
+  }
   const mode = e.target.closest('[data-mode]'); if (mode) { state.mode = mode.dataset.mode; document.querySelectorAll('[data-mode]').forEach(el => { const active = el === mode; el.classList.toggle('active', active); el.setAttribute('aria-selected', String(active)); }); $('#classicPanel').hidden = state.mode !== 'classic'; $('#ouPanel').hidden = state.mode !== 'ou'; return; }
   const slot = e.target.closest('[data-ou-slot]'); if (slot) { state.ouSlot = Number(slot.dataset.ouSlot); document.querySelectorAll('[data-ou-slot]').forEach(el => { const active = el === slot; el.classList.toggle('active', active); el.setAttribute('aria-selected', String(active)); }); render(); return; }
   const ouBet = e.target.closest('[data-ou-bet]'); if (ouBet) { placeOu(Number(ouBet.dataset.slot), ouBet.dataset.ouBet); return; }

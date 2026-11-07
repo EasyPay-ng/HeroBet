@@ -1,6 +1,6 @@
 # Game API — Step 1: shared round service
 
-This is the first backend slice, deliberately limited to public round state. It does not accept bets, read/write wallets, or issue rewards. The existing browser demo remains unchanged until this API is tested and the next integration step is ready.
+The API is deliberately limited to public round state. It does not accept bets, read/write wallets, or issue rewards. The game screen now reads this API when it is available and shows a clearly labeled local practice fallback when it is not. Bet controls are locked while viewing shared rounds until server-side bet endpoints exist.
 
 ## Stack
 

@@ -41,7 +41,7 @@ function site(page, user = null) {
   const x = site('app-home', user);
   assert.match(x.q('.app-home-welcome').textContent, /Welcome back, Sky Captain/);
   assert.equal(x.q('.account-bottom-nav a').getAttribute('href'), './app-home.html', 'bottom Home opens the player lobby, not the public index');
-  assert.match(x.q('.app-home-status').textContent, /rounds are not yet shared/);
+  assert.match(x.q('.app-home-status').textContent, /Shared practice flights/);
   assert.match(x.q('.app-home-disclaimer').textContent, /Real-money betting and cash rewards are not enabled/);
   assert.match(x.q('.account-bottom-nav a').className, /active/);
   x.close();
